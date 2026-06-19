@@ -9,7 +9,7 @@ web-build/
 # IntelliJ / Android Studio
 .idea/
 
-.claude 
+.claude
 
 .export-check
 
