@@ -123,7 +123,7 @@ export default function DonateScreen() {
           <View style={{ padding: 12, backgroundColor: "#fff", borderRadius: 16, borderWidth: 3, borderColor: "#7c3aed40" }}>
             <View>
               <QRCode
-                value="upi://pay?pa=yourupi@oksbi&pn=TrendingPolls"
+                value="upi://pay?pa=yourupi@oksbi&pn=trendingPolls"
                 size={200}
               />
             </View>

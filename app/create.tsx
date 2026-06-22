@@ -81,8 +81,8 @@ export default function CreatePollScreen() {
     );
 
   return (
-    <SafeAreaView className="flex-1 bg-background">
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+    <SafeAreaView edges={["top", "left", "right"]} className="flex-1 bg-background">
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
         {/* Header */}
         <View className="mb-6">
           <Text className="text-3xl font-extrabold text-text-primary">{t("createPoll")}</Text>

@@ -21,18 +21,47 @@ import { isLoggedIn, getCurrentUserId } from "../../src/utils/authUser";
 import { timeAgo } from "../../src/utils/timeAgo";
 import i18n from "../../src/i18n";
 import * as SecureStore from "expo-secure-store";
+import { useTheme } from "../../src/utils/theme";
 
 const PALETTE = ["#8b5cf6", "#d946ef", "#0ea5e9", "#10b981"];
 const STEPS = ["Region", "Vote", "Results"] as const;
+
+/** Normalise regional result row → per-option vote counts keyed "1","2","3","4" */
+function extractOptionVotes(row: any): Record<string, number> {
+  // Shape A: { votes: { option1: n, option2: n, … } }
+  if (row.votes && typeof row.votes === "object" && !Array.isArray(row.votes)) {
+    const out: Record<string, number> = {};
+    for (let i = 1; i <= 4; i++) {
+      out[String(i)] =
+        row.votes[`option${i}`] ??
+        row.votes[`option_${i}`] ??
+        row.votes[i] ??
+        0;
+    }
+    return out;
+  }
+  // Shape B: flat { votes1: n, votes2: n, … }
+  const out: Record<string, number> = {};
+  for (let i = 1; i <= 4; i++) {
+    out[String(i)] =
+      row[`votes${i}`] ??
+      row[`option${i}Votes`] ??
+      row[`vote${i}`] ??
+      0;
+  }
+  return out;
+}
 
 export default function RegionalPollScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useTranslation();
   const router = useRouter();
+  const { colors } = useTheme();
+
   const [poll, setPoll] = useState<any>(null);
   const [regions, setRegions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [step, setStep] = useState<0 | 1 | 2>(0); // 0=region 1=vote 2=results
+  const [step, setStep] = useState<0 | 1 | 2>(0);
   const [selectedRegion, setSelectedRegion] = useState<any>(null);
   const [selectedOption, setSelectedOption] = useState("");
   const [originalVoted, setOriginalVoted] = useState("");
@@ -62,7 +91,7 @@ export default function RegionalPollScreen() {
         ]);
         const [pollData, regData] = await Promise.all([pollRes.json(), regRes.json()]);
         setPoll(pollData);
-        setRegions(regData);
+        setRegions(Array.isArray(regData) ? regData : []);
 
         if (reactRes.ok) {
           const rd = await reactRes.json();
@@ -80,16 +109,12 @@ export default function RegionalPollScreen() {
             setSelectedOption(vid);
             setOriginalVoted(vid);
             if (vd.regionCode) {
-              const region = regData.find((r: any) => r.regionCode === vd.regionCode);
-              setSelectedRegion(
-                region || {
-                  regionCode: vd.regionCode,
-                  regionName: vd.regionCode,
-                }
-              );
+              const region =
+                (Array.isArray(regData) ? regData : []).find((r: any) => r.regionCode === vd.regionCode) ||
+                { regionCode: vd.regionCode, regionName: vd.regionCode };
+              setSelectedRegion(region);
             }
             setStep(2);
-            // Load regional results
             const rrRes = await apiFetch(`/api/polls/${id}/regional-results`);
             if (rrRes.ok) setRegionalData(await rrRes.json());
           }
@@ -109,10 +134,7 @@ export default function RegionalPollScreen() {
 
   async function handlePostComment() {
     if (!commentText.trim()) return;
-    if (!loggedIn) {
-      router.push("/(auth)/login");
-      return;
-    }
+    if (!loggedIn) { router.push("/(auth)/login"); return; }
     setIsPosting(true);
     try {
       const userId = await getCurrentUserId();
@@ -120,16 +142,12 @@ export default function RegionalPollScreen() {
       const user = userJson ? JSON.parse(userJson) : null;
       const res = await apiFetch(`/api/comments/${id}`, {
         method: "POST",
-        body: JSON.stringify({
-          userId,
-          userName: user?.name,
-          text: commentText.trim(),
-        }),
+        body: JSON.stringify({ userId, userName: user?.name, text: commentText.trim() }),
       });
       if (!res.ok) throw new Error("Failed");
       setCommentText("");
       await loadComments();
-    } catch (e) {
+    } catch {
       Alert.alert("Error", "Failed to post comment");
     } finally {
       setIsPosting(false);
@@ -138,12 +156,7 @@ export default function RegionalPollScreen() {
 
   async function handleShare() {
     try {
-      await Share.share({
-        message: `${poll.title}
-
-  Vote now:
-  https://trendingpolls.in/regional/${poll.id}`,
-      });
+      await Share.share({ message: `${poll.title}\n\nVote now:\nhttps://trendingpolls.in/regional/${poll.id}` });
     } catch (error) {
       console.error("Share failed", error);
     }
@@ -153,10 +166,7 @@ export default function RegionalPollScreen() {
     if (!loggedIn) {
       Alert.alert("Login Required", "Sign in to like or dislike this poll.", [
         { text: "Cancel", style: "cancel" },
-        {
-          text: "Login",
-          onPress: () => router.push("/(auth)/login"),
-        },
+        { text: "Login", onPress: () => router.push("/(auth)/login") },
       ]);
       return;
     }
@@ -194,11 +204,7 @@ export default function RegionalPollScreen() {
       const userId = await getCurrentUserId();
       const res = await apiFetch(`/api/polls/${id}/vote`, {
         method: "POST",
-        body: JSON.stringify({
-          selectedOption,
-          userId,
-          regionCode: selectedRegion.regionCode,
-        }),
+        body: JSON.stringify({ selectedOption, userId, regionCode: selectedRegion.regionCode }),
       });
       if (!res.ok) throw new Error("Vote failed");
       const updated = await res.json();
@@ -208,7 +214,7 @@ export default function RegionalPollScreen() {
       const rrRes = await apiFetch(`/api/polls/${id}/regional-results`);
       if (rrRes.ok) setRegionalData(await rrRes.json());
       setStep(2);
-    } catch (e) {
+    } catch {
       Alert.alert("Error", "Failed to submit vote");
     } finally {
       setIsVoting(false);
@@ -217,15 +223,15 @@ export default function RegionalPollScreen() {
 
   if (loading)
     return (
-      <SafeAreaView className="flex-1 bg-background items-center justify-center">
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }}>
         <ActivityIndicator color="#a855f7" size="large" />
       </SafeAreaView>
     );
 
   if (!poll)
     return (
-      <SafeAreaView className="flex-1 bg-background items-center justify-center">
-        <Text className="text-text-primary">Poll not found</Text>
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }}>
+        <Text style={{ color: colors.textPrimary }}>Poll not found</Text>
       </SafeAreaView>
     );
 
@@ -236,21 +242,50 @@ export default function RegionalPollScreen() {
     { id: "4", text: poll.option4 },
   ].filter((o) => o.text?.trim());
 
-  // Overall results
-  const overallTotal = options.reduce((sum, opt) => {
-    return sum + regionalData.reduce((s, r) => s + (r.votes?.[`option${opt.id}`] || 0), 0);
-  }, 0);
+  // ── Aggregate overall results across all regions ──
+  const overallVotesById: Record<string, number> = {};
+  for (const row of regionalData) {
+    const v = extractOptionVotes(row);
+    for (const opt of options) {
+      overallVotesById[opt.id] = (overallVotesById[opt.id] || 0) + (v[opt.id] || 0);
+    }
+  }
+  const overallTotal = Object.values(overallVotesById).reduce((s, n) => s + n, 0);
   const overallResults = options
     .map((opt, i) => {
-      const votes = regionalData.reduce((s, r) => s + (r.votes?.[`option${opt.id}`] || 0), 0);
-      return {
-        ...opt,
-        votes,
-        pct: overallTotal > 0 ? Math.round((votes / overallTotal) * 100) : 0,
-        color: PALETTE[i],
-      };
+      const votes = overallVotesById[opt.id] || 0;
+      return { ...opt, votes, pct: overallTotal > 0 ? Math.round((votes / overallTotal) * 100) : 0, color: PALETTE[i] };
     })
     .sort((a, b) => b.votes - a.votes);
+
+  // ── Per-region breakdown for selected region ──
+  const myRegionRow = selectedRegion
+    ? regionalData.find((r) => r.regionCode === selectedRegion.regionCode)
+    : null;
+  const myRegionVotes = myRegionRow ? extractOptionVotes(myRegionRow) : null;
+  const myRegionTotal = myRegionVotes ? Object.values(myRegionVotes).reduce((s, n) => s + n, 0) : 0;
+  const myRegionResults = myRegionVotes
+    ? options
+        .map((opt, i) => ({
+          ...opt,
+          votes: myRegionVotes[opt.id] || 0,
+          pct: myRegionTotal > 0 ? Math.round(((myRegionVotes[opt.id] || 0) / myRegionTotal) * 100) : 0,
+          color: PALETTE[i],
+        }))
+        .sort((a, b) => b.votes - a.votes)
+    : [];
+
+  // ─────────────────────────────────────────────────
+
+  const c = colors; // shorthand
+  const cardStyle = {
+    backgroundColor: c.surface,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: c.border,
+    padding: 20,
+    marginBottom: 16,
+  };
 
   return (
     <KeyboardAvoidingView
@@ -258,102 +293,113 @@ export default function RegionalPollScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
     >
-      <SafeAreaView edges={["left", "right", "bottom"]} className="flex-1 bg-background">
+      <SafeAreaView edges={["left", "right", "bottom"]} style={{ flex: 1, backgroundColor: c.background }}>
         <ScrollView contentContainerStyle={{ padding: 16 }}>
-          {/* Step progress bar */}
-          <View className="flex-row items-center mb-6">
+
+          {/* ── Step progress ── */}
+          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 20 }}>
             {STEPS.map((s, i) => (
-              <View key={s} className="flex-row items-center flex-1">
+              <View key={s} style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
                 <View
-                  className={`w-7 h-7 rounded-full items-center justify-center ${step >= i ? "bg-primary" : "bg-surface border border-border"}`}
+                  style={{
+                    width: 28, height: 28, borderRadius: 14,
+                    alignItems: "center", justifyContent: "center",
+                    backgroundColor: step >= i ? "#7c3aed" : c.surface,
+                    borderWidth: step >= i ? 0 : 1,
+                    borderColor: c.border,
+                  }}
                 >
                   {step > i ? (
                     <Ionicons name="checkmark" size={14} color="white" />
                   ) : (
-                    <Text className={`text-xs font-bold ${step === i ? "text-white" : "text-text-secondary"}`}>
-                      {i + 1}
-                    </Text>
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: step === i ? "#fff" : c.textSecondary }}>{i + 1}</Text>
                   )}
                 </View>
-                <Text className={`text-xs ml-1 font-medium ${step >= i ? "text-accent" : "text-text-secondary"}`}>
-                  {s}
-                </Text>
+                <Text style={{ fontSize: 11, marginLeft: 4, fontWeight: "600", color: step >= i ? "#a855f7" : c.textSecondary }}>{s}</Text>
                 {i < STEPS.length - 1 && (
-                  <View className={`flex-1 h-0.5 mx-2 ${step > i ? "bg-primary" : "bg-border"}`} />
+                  <View style={{ flex: 1, height: 1.5, marginHorizontal: 8, backgroundColor: step > i ? "#7c3aed" : c.border }} />
                 )}
               </View>
             ))}
           </View>
 
-          {/* Poll title */}
-          <View className="bg-surface rounded-3xl border border-border p-5 mb-4">
-            <Text className="text-xl font-extrabold text-text-primary leading-snug">{poll.title}</Text>
-            {poll.description && <Text className="text-text-secondary text-sm mt-1">{poll.description}</Text>}
+          {/* ── Poll title card ── */}
+          <View style={cardStyle}>
+            <Text style={{ fontSize: 19, fontWeight: "800", color: c.textPrimary, lineHeight: 26 }}>{poll.title}</Text>
+            {poll.description && <Text style={{ color: c.textSecondary, fontSize: 13, marginTop: 6 }}>{poll.description}</Text>}
 
-            <View className="flex-row items-center justify-between mt-3 mb-4">
-              <View className="flex-row items-center gap-5">
-                <TouchableOpacity className="flex-row items-center" onPress={() => handleReact("like")}>
-                  <Ionicons name="thumbs-up-outline" size={18} color="#22c55e" />
-                  <Text className="ml-1 text-text-secondary">{likes}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 14 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
+                <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 5 }} onPress={() => handleReact("like")}>
+                  <Ionicons name={myReaction === "like" ? "thumbs-up" : "thumbs-up-outline"} size={18} color="#22c55e" />
+                  <Text style={{ color: c.textSecondary, fontSize: 13 }}>{likes}</Text>
                 </TouchableOpacity>
-
-                <TouchableOpacity className="flex-row items-center" onPress={() => handleReact("dislike")}>
-                  <Ionicons name="thumbs-down-outline" size={18} color="#ef4444" />
-                  <Text className="ml-1 text-text-secondary">{dislikes}</Text>
+                <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 5 }} onPress={() => handleReact("dislike")}>
+                  <Ionicons name={myReaction === "dislike" ? "thumbs-down" : "thumbs-down-outline"} size={18} color="#ef4444" />
+                  <Text style={{ color: c.textSecondary, fontSize: 13 }}>{dislikes}</Text>
                 </TouchableOpacity>
               </View>
-
               <TouchableOpacity onPress={handleShare}>
                 <Ionicons name="share-social-outline" size={20} color="#a855f7" />
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* Step 0: Region selection */}
+          {/* ── Step 0: Region selection ── */}
           {step === 0 && (
-            <View className="bg-surface rounded-3xl border border-border p-5 mb-4">
-              <View className="flex-row items-center gap-3 mb-4">
-                <View className="w-8 h-8 rounded-xl bg-sky-500/10 items-center justify-center">
-                  <Ionicons name="map-outline" size={16} color="#0ea5e9" />
+            <View style={cardStyle}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: "#0ea5e91a", alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name="map-outline" size={18} color="#0ea5e9" />
                 </View>
-                <Text className="text-base font-bold text-text-primary">{t("selectRegion")}</Text>
+                <Text style={{ fontSize: 16, fontWeight: "700", color: c.textPrimary }}>{t("selectRegion")}</Text>
               </View>
-              <View className="flex-row flex-wrap gap-2">
-                {regions.map((r) => (
-                  <TouchableOpacity
-                    key={r.regionCode}
-                    onPress={() => {
-                      setSelectedRegion(r);
-                      setStep(1);
-                    }}
-                    className="px-4 py-3 rounded-2xl border border-border bg-surface-2 items-center min-w-[80px]"
-                  >
-                    <Text className="text-lg mb-0.5">{r.flag || "🌐"}</Text>
-                    <Text className="text-xs font-bold text-text-primary">{r.regionCode}</Text>
-                    <Text className="text-[10px] text-text-secondary text-center mt-0.5" numberOfLines={1}>
-                      {r.regionName}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              {regions.length === 0 ? (
+                <Text style={{ color: c.textSecondary, fontSize: 13 }}>No regions available for this poll.</Text>
+              ) : (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                  {regions.map((r) => (
+                    <TouchableOpacity
+                      key={r.regionCode}
+                      onPress={() => { setSelectedRegion(r); setStep(1); }}
+                      style={{
+                        paddingHorizontal: 16,
+                        paddingVertical: 12,
+                        borderRadius: 16,
+                        borderWidth: 1,
+                        borderColor: c.border,
+                        backgroundColor: c.surface2,
+                        alignItems: "center",
+                        minWidth: 80,
+                      }}
+                    >
+                      <Text style={{ fontSize: 20, marginBottom: 2 }}>{r.flag || "🌐"}</Text>
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: c.textPrimary }}>{r.regionCode}</Text>
+                      <Text style={{ fontSize: 10, color: c.textSecondary, textAlign: "center", marginTop: 2 }} numberOfLines={1}>{r.regionName}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
           )}
 
-          {/* Step 1: Vote */}
+          {/* ── Step 1: Vote ── */}
           {step === 1 && !hasVoted && (
-            <View className="bg-surface rounded-3xl border border-border p-5 mb-4">
-              {/* Region chip */}
-              <View className="flex-row items-center gap-2 mb-4">
-                <View className="flex-row items-center gap-1.5 bg-primary/10 px-3 py-1.5 rounded-full border border-primary/20">
+            <View style={cardStyle}>
+              {/* Region chip + change */}
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#7c3aed1a", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: "#7c3aed33" }}>
+                  <Text style={{ fontSize: 16 }}>{selectedRegion?.flag || "🌐"}</Text>
                   <Ionicons name="location-outline" size={12} color="#a855f7" />
-                  <Text className="text-xs font-semibold text-accent">{selectedRegion?.regionCode}</Text>
-                  <Text className="text-xs text-text-secondary">· {selectedRegion?.regionName}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#a855f7" }}>{selectedRegion?.regionCode}</Text>
+                  <Text style={{ fontSize: 12, color: c.textSecondary }}>· {selectedRegion?.regionName}</Text>
                 </View>
                 <TouchableOpacity onPress={() => setStep(0)}>
-                  <Text className="text-xs text-accent/70">Change</Text>
+                  <Text style={{ fontSize: 12, color: "#a855f780" }}>Change</Text>
                 </TouchableOpacity>
               </View>
-              <Text className="text-base font-bold text-text-primary mb-4">{poll.questionTitle || poll.title}</Text>
+
+              <Text style={{ fontSize: 15, fontWeight: "700", color: c.textPrimary, marginBottom: 14 }}>{poll.questionTitle || poll.title}</Text>
               {options.map((opt) => (
                 <OptionCard
                   key={opt.id}
@@ -366,229 +412,312 @@ export default function RegionalPollScreen() {
               <TouchableOpacity
                 onPress={handleVote}
                 disabled={!selectedOption || isVoting}
-                className="bg-primary rounded-xl py-3.5 items-center mt-2"
-                style={{ opacity: !selectedOption || isVoting ? 0.5 : 1 }}
+                style={{ backgroundColor: "#7c3aed", borderRadius: 14, paddingVertical: 14, alignItems: "center", marginTop: 8, opacity: !selectedOption || isVoting ? 0.5 : 1 }}
               >
-                <Text className="text-white font-bold">{isVoting ? t("loading") : t("submitVote")}</Text>
+                {isVoting ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>{t("submitVote")}</Text>}
               </TouchableOpacity>
             </View>
           )}
 
-          {/* Step 2: Results */}
+          {/* ── Step 2: Results ── */}
           {step === 2 && (
             <View>
               {/* Your vote banner */}
-              {selectedOption &&
-                (() => {
-                  const myOpt = options.find((o) => o.id === selectedOption);
-                  return myOpt ? (
-                    <View className="flex-row items-center gap-3 bg-success/8 border border-success/25 rounded-2xl p-4 mb-4">
-                      <View className="w-9 h-9 rounded-xl bg-success/15 items-center justify-center">
-                        <Ionicons name="checkmark-circle" size={20} color="#10b981" />
-                      </View>
-                      <View className="flex-1">
-                        <Text className="text-xs font-semibold text-success">{t("yourVote")}</Text>
-                        <Text className="text-sm font-bold text-green-300">{myOpt.text}</Text>
-                      </View>
-                      <Text className="text-xs text-success/60">See results below</Text>
+              {selectedOption && (() => {
+                const myOpt = options.find((o) => o.id === selectedOption);
+                return myOpt ? (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "#10b9811a", borderWidth: 1, borderColor: "#10b98133", borderRadius: 16, padding: 16, marginBottom: 16 }}>
+                    <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: "#10b98126", alignItems: "center", justifyContent: "center" }}>
+                      <Ionicons name="checkmark-circle" size={20} color="#10b981" />
                     </View>
-                  ) : null;
-                })()}
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: "#10b981" }}>{t("yourVote")}</Text>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: "#34d399" }}>{myOpt.text}</Text>
+                    </View>
+                    <Text style={{ fontSize: 11, color: "#10b98166" }}>See results below</Text>
+                  </View>
+                ) : null;
+              })()}
 
-              {/* Stats */}
-              <View className="flex-row gap-3 mb-4">
+              {/* Your region banner */}
+              {selectedRegion && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "#0ea5e91a", borderWidth: 1, borderColor: "#0ea5e933", borderRadius: 16, padding: 14, marginBottom: 16 }}>
+                  <Text style={{ fontSize: 22 }}>{selectedRegion.flag || "🌐"}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: "#0ea5e9" }}>Your Region</Text>
+                    <Text style={{ fontSize: 14, fontWeight: "700", color: c.textPrimary }}>{selectedRegion.regionName || selectedRegion.regionCode}</Text>
+                  </View>
+                  <View style={{ backgroundColor: "#0ea5e91a", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: "#0ea5e933" }}>
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#0ea5e9" }}>{myRegionTotal > 0 ? `${myRegionTotal} votes` : "No votes yet"}</Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Stats row */}
+              <View style={{ flexDirection: "row", gap: 12, marginBottom: 16 }}>
                 {[
-                  {
-                    icon: "globe-outline",
-                    val: String(poll.availableRegions?.length || regions.length || 0),
-                    label: t("regionParticipating"),
-                    color: "#0ea5e9",
-                  },
-                  {
-                    icon: "people-outline",
-                    val: (poll.totalVotes || 0).toLocaleString(),
-                    label: t("totalVotes"),
-                    color: "#8b5cf6",
-                  },
+                  { icon: "globe-outline", val: String(regions.length || 0), label: t("regionParticipating"), color: "#0ea5e9" },
+                  { icon: "people-outline", val: (poll.totalVotes || overallTotal || 0).toLocaleString(), label: t("totalVotes"), color: "#8b5cf6" },
                 ].map((s, i) => (
-                  <View key={i} className="flex-1 bg-surface rounded-2xl p-3.5 border border-border items-center">
+                  <View key={i} style={{ flex: 1, backgroundColor: c.surface, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: c.border, alignItems: "center" }}>
                     <Ionicons name={s.icon as any} size={18} color={s.color} />
-                    <Text className="text-xl font-extrabold mt-1" style={{ color: s.color }}>
-                      {s.val}
-                    </Text>
-                    <Text className="text-[10px] text-text-secondary text-center mt-0.5">{s.label}</Text>
+                    <Text style={{ fontSize: 20, fontWeight: "800", color: s.color, marginTop: 4 }}>{s.val}</Text>
+                    <Text style={{ fontSize: 10, color: c.textSecondary, textAlign: "center", marginTop: 2 }}>{s.label}</Text>
                   </View>
                 ))}
               </View>
 
-              {/* Overall results */}
-              <View className="bg-surface rounded-3xl border border-border p-5 mb-4">
-                <Text className="text-base font-bold text-text-primary mb-4">{t("overallResults")}</Text>
+              {/* ── Your region breakdown ── */}
+              {myRegionResults.length > 0 && (
+                <View style={{ ...cardStyle, marginBottom: 16 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                    <Text style={{ fontSize: 16 }}>{selectedRegion?.flag || "🌐"}</Text>
+                    <Text style={{ fontSize: 15, fontWeight: "700", color: c.textPrimary }}>
+                      {selectedRegion?.regionName || selectedRegion?.regionCode} Results
+                    </Text>
+                    <View style={{ marginLeft: "auto", backgroundColor: "#0ea5e91a", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: "#0ea5e930" }}>
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: "#0ea5e9" }}>{myRegionTotal} votes</Text>
+                    </View>
+                  </View>
+                  {myRegionResults.map((opt, i) => {
+                    const isMyVote = opt.id === selectedOption;
+                    const isWinner = i === 0 && opt.votes > 0;
+                    return (
+                      <View
+                        key={opt.id}
+                        style={{
+                          marginBottom: 12,
+                          padding: 12,
+                          borderRadius: 14,
+                          borderWidth: 2,
+                          borderColor: isMyVote ? "#10b98133" : "transparent",
+                          backgroundColor: isMyVote ? "#10b9810d" : "transparent",
+                        }}
+                      >
+                        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1 }}>
+                            {isWinner && <Ionicons name="trophy" size={13} color="#f59e0b" />}
+                            <Text style={{ fontSize: 13, color: c.textSecondary, flex: 1 }} numberOfLines={1}>{opt.text}</Text>
+                          </View>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                            {isMyVote && (
+                              <View style={{ flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999, backgroundColor: "#10b98120", borderWidth: 1, borderColor: "#10b98130" }}>
+                                <Ionicons name="checkmark" size={9} color="#10b981" />
+                                <Text style={{ fontSize: 9, fontWeight: "700", color: "#10b981" }}>Your vote</Text>
+                              </View>
+                            )}
+                            <Text style={{ fontSize: 12, fontWeight: "700", color: opt.color }}>{opt.pct}%</Text>
+                          </View>
+                        </View>
+                        <View style={{ height: 7, backgroundColor: c.surface2, borderRadius: 999, overflow: "hidden" }}>
+                          <View style={{ height: "100%", borderRadius: 999, width: `${opt.pct}%`, backgroundColor: opt.color }} />
+                        </View>
+                        <Text style={{ fontSize: 10, color: c.textSecondary, marginTop: 3 }}>{opt.votes} votes</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
+              {/* ── Overall results ── */}
+              <View style={cardStyle}>
+                <Text style={{ fontSize: 15, fontWeight: "700", color: c.textPrimary, marginBottom: 16 }}>{t("overallResults")}</Text>
                 {overallResults.map((opt, i) => {
                   const isMyVote = opt.id === selectedOption;
                   const isWinner = i === 0 && opt.votes > 0;
                   return (
                     <View
                       key={opt.id}
-                      className={`mb-3 p-3 rounded-2xl border-2 ${isMyVote ? "border-success/30 bg-success/5" : "border-transparent"}`}
+                      style={{
+                        marginBottom: 12,
+                        padding: 12,
+                        borderRadius: 14,
+                        borderWidth: 2,
+                        borderColor: isMyVote ? "#10b98133" : "transparent",
+                        backgroundColor: isMyVote ? "#10b9810d" : "transparent",
+                      }}
                     >
-                      <View className="flex-row items-center justify-between mb-1.5">
-                        <View className="flex-row items-center gap-2 flex-1">
+                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1 }}>
                           {isWinner && <Ionicons name="trophy" size={13} color="#f59e0b" />}
-                          <Text className="text-sm font-medium text-text-secondary flex-1" numberOfLines={1}>
-                            {opt.text}
-                          </Text>
+                          <Text style={{ fontSize: 13, color: c.textSecondary, flex: 1 }} numberOfLines={1}>{opt.text}</Text>
                         </View>
-                        <View className="flex-row items-center gap-1.5">
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                           {isMyVote && (
-                            <View className="flex-row items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-success/15 border border-success/25">
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999, backgroundColor: "#10b98120", borderWidth: 1, borderColor: "#10b98130" }}>
                               <Ionicons name="checkmark" size={9} color="#10b981" />
-                              <Text className="text-[9px] font-bold text-success">Your vote</Text>
+                              <Text style={{ fontSize: 9, fontWeight: "700", color: "#10b981" }}>Your vote</Text>
                             </View>
                           )}
-                          <Text className="text-xs font-bold" style={{ color: opt.color }}>
-                            {opt.pct}%
-                          </Text>
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: opt.color }}>{opt.pct}%</Text>
                         </View>
                       </View>
-                      <View className="h-2 bg-surface-2 rounded-full overflow-hidden">
-                        <View
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${opt.pct}%`,
-                            backgroundColor: opt.color,
-                          }}
-                        />
+                      <View style={{ height: 7, backgroundColor: c.surface2, borderRadius: 999, overflow: "hidden" }}>
+                        <View style={{ height: "100%", borderRadius: 999, width: `${opt.pct}%`, backgroundColor: opt.color }} />
                       </View>
+                      <Text style={{ fontSize: 10, color: c.textSecondary, marginTop: 3 }}>{opt.votes.toLocaleString()} votes across all regions</Text>
                     </View>
                   );
                 })}
               </View>
 
+              {/* ── Results by Region ── */}
+              {regionalData.length > 0 && (
+                <View style={{ ...cardStyle, marginBottom: 16 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                    <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: "#0ea5e91a", alignItems: "center", justifyContent: "center" }}>
+                      <Ionicons name="globe-outline" size={18} color="#0ea5e9" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 15, fontWeight: "700", color: c.textPrimary }}>Results by Region</Text>
+                      <Text style={{ fontSize: 11, color: c.textSecondary, marginTop: 2 }}>{regionalData.length} region{regionalData.length !== 1 ? "s" : ""} participated</Text>
+                    </View>
+                  </View>
+
+                  {regionalData.map((row, rowIdx) => {
+                    const regionCode = row.regionCode || row.region;
+                    const regionMeta = regions.find((r) => r.regionCode === regionCode) || { regionCode, regionName: regionCode, flag: "🌐" };
+                    const isMyRegion = selectedRegion?.regionCode === regionCode;
+                    const rv = extractOptionVotes(row);
+                    const rTotal = Object.values(rv).reduce((s: number, n) => s + (n as number), 0);
+                    const rSorted = options
+                      .map((opt, i) => ({ ...opt, votes: rv[opt.id] || 0, pct: rTotal > 0 ? Math.round(((rv[opt.id] || 0) / rTotal) * 100) : 0, color: PALETTE[i] }))
+                      .sort((a, b) => b.votes - a.votes);
+
+                    return (
+                      <View
+                        key={regionCode}
+                        style={{
+                          borderRadius: 16,
+                          borderWidth: 1.5,
+                          borderColor: isMyRegion ? "#0ea5e966" : c.border,
+                          backgroundColor: isMyRegion ? "#0ea5e908" : c.background,
+                          padding: 14,
+                          marginBottom: rowIdx < regionalData.length - 1 ? 12 : 0,
+                        }}
+                      >
+                        {/* Region header */}
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: rTotal > 0 ? 12 : 0 }}>
+                          <Text style={{ fontSize: 20 }}>{regionMeta.flag || "🌐"}</Text>
+                          <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                              <Text style={{ fontSize: 13, fontWeight: "700", color: c.textPrimary }}>{regionMeta.regionName || regionCode}</Text>
+                              {isMyRegion && (
+                                <View style={{ backgroundColor: "#0ea5e91a", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: "#0ea5e933" }}>
+                                  <Text style={{ fontSize: 9, fontWeight: "700", color: "#0ea5e9" }}>YOUR REGION</Text>
+                                </View>
+                              )}
+                            </View>
+                            <Text style={{ fontSize: 11, color: c.textSecondary, marginTop: 1 }}>{regionCode}</Text>
+                          </View>
+                          <View style={{ backgroundColor: c.surface2, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
+                            <Text style={{ fontSize: 11, fontWeight: "700", color: rTotal > 0 ? "#0ea5e9" : c.textSecondary }}>
+                              {rTotal > 0 ? `${rTotal.toLocaleString()} votes` : "No votes yet"}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Per-option mini bars */}
+                        {rTotal > 0 && rSorted.map((opt) => {
+                          const isWinner = opt.pct === Math.max(...rSorted.map((o) => o.pct)) && opt.pct > 0;
+                          return (
+                            <View key={opt.id} style={{ marginBottom: 8 }}>
+                              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flex: 1 }}>
+                                  {isWinner && <Ionicons name="trophy" size={11} color="#f59e0b" />}
+                                  <Text style={{ fontSize: 12, color: c.textSecondary, flex: 1 }} numberOfLines={1}>{opt.text}</Text>
+                                </View>
+                                <Text style={{ fontSize: 11, fontWeight: "700", color: opt.color, marginLeft: 8 }}>{opt.pct}%</Text>
+                              </View>
+                              <View style={{ height: 5, backgroundColor: c.surface2, borderRadius: 999, overflow: "hidden" }}>
+                                <View style={{ height: "100%", borderRadius: 999, width: `${opt.pct}%`, backgroundColor: opt.color }} />
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
               {/* Change vote */}
               {loggedIn && (
                 <TouchableOpacity
-                  onPress={() => {
-                    setHasVoted(false);
-                    setStep(1);
-                  }}
-                  className="flex-row items-center justify-center gap-2 bg-surface border border-border rounded-2xl py-3 mb-4"
+                  onPress={() => { setHasVoted(false); setStep(1); }}
+                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, borderRadius: 16, paddingVertical: 12, marginBottom: 16 }}
                 >
-                  <Ionicons name="pencil-outline" size={14} color="#9090b0" />
-                  <Text className="text-text-secondary text-sm font-medium">{t("changeVote")}</Text>
+                  <Ionicons name="pencil-outline" size={14} color={c.textSecondary} />
+                  <Text style={{ fontSize: 13, color: c.textSecondary, fontWeight: "500" }}>{t("changeVote")}</Text>
                 </TouchableOpacity>
               )}
 
-              {/* Comments */}
-                        <View className="bg-surface rounded-3xl border border-border p-5 mb-4">
-                          <View className="flex-row items-center gap-2 mb-4">
-                            <Ionicons name="chatbubbles-outline" size={18} color="#a855f7" />
-                            <Text className="text-base font-bold text-text-primary">
-                              {t("comments")} {comments.length > 0 ? `(${comments.length})` : ""}
-                            </Text>
-                          </View>
+              {/* ── Comments ── */}
+              <View style={cardStyle}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                  <Ionicons name="chatbubbles-outline" size={18} color="#a855f7" />
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: c.textPrimary }}>
+                    {t("comments")} {comments.length > 0 ? `(${comments.length})` : ""}
+                  </Text>
+                </View>
 
-                          {/* Post comment input */}
-                          {loggedIn ? (
-                            <View className="flex-row items-end gap-2 mb-5">
-                              <View className="flex-1 bg-background border border-border rounded-2xl px-4 py-3">
-                                <TextInput
-                                  className="text-text-primary text-sm"
-                                  placeholder={t("writeComment")}
-                                  placeholderTextColor="#6060a0"
-                                  value={commentText}
-                                  onChangeText={setCommentText}
-                                  multiline
-                                  maxLength={200}
-                                  style={{
-                                    minHeight: 40,
-                                    maxHeight: 80,
-                                  }}
-                                />
-                              </View>
-                              <TouchableOpacity
-                                onPress={handlePostComment}
-                                disabled={!commentText.trim() || isPosting}
-                                className="w-11 h-11 rounded-2xl bg-primary items-center justify-center"
-                                style={{
-                                  opacity: !commentText.trim() || isPosting ? 0.5 : 1,
-                                }}
-                              >
-                                {isPosting ? (
-                                  <ActivityIndicator size="small" color="white" />
-                                ) : (
-                                  <Ionicons name="send" size={16} color="white" />
-                                )}
-                              </TouchableOpacity>
-                            </View>
-                          ) : (
-                            <TouchableOpacity
-                              onPress={() => router.push("/(auth)/login")}
-                              className="flex-row items-center gap-2 bg-primary/10 border border-primary/20 rounded-2xl p-3 mb-4"
-                            >
-                              <Ionicons name="log-in-outline" size={16} color="#a855f7" />
-                              <Text className="text-accent text-sm font-medium">{t("loginToComment")}</Text>
-                            </TouchableOpacity>
-                          )}
+                {loggedIn ? (
+                  <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 10, marginBottom: 20 }}>
+                    <View style={{ flex: 1, backgroundColor: c.inputBg, borderWidth: 1, borderColor: c.border, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10 }}>
+                      <TextInput
+                        style={{ color: c.textPrimary, fontSize: 13, minHeight: 36, maxHeight: 80 }}
+                        placeholder={t("writeComment")}
+                        placeholderTextColor={c.textSecondary}
+                        value={commentText}
+                        onChangeText={setCommentText}
+                        multiline
+                        maxLength={200}
+                      />
+                    </View>
+                    <TouchableOpacity
+                      onPress={handlePostComment}
+                      disabled={!commentText.trim() || isPosting}
+                      style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: "#7c3aed", alignItems: "center", justifyContent: "center", opacity: !commentText.trim() || isPosting ? 0.5 : 1 }}
+                    >
+                      {isPosting ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="send" size={16} color="white" />}
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => router.push("/(auth)/login")}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#7c3aed1a", borderWidth: 1, borderColor: "#7c3aed33", borderRadius: 14, padding: 12, marginBottom: 16 }}
+                  >
+                    <Ionicons name="log-in-outline" size={16} color="#a855f7" />
+                    <Text style={{ color: "#a855f7", fontSize: 13, fontWeight: "500" }}>{t("loginToComment")}</Text>
+                  </TouchableOpacity>
+                )}
 
-                          {/* Comments list */}
-                          {commentsLoading ? (
-                            <ActivityIndicator color="#a855f7" size="small" />
-                          ) : comments.length === 0 ? (
-                            <View className="items-center py-6">
-                              <Ionicons name="chatbubble-outline" size={32} color="#6060a0" />
-                              <Text className="text-text-secondary text-sm mt-2">{t("noComments")}</Text>
-                            </View>
-                          ) : (
-                            comments.map((c, i) => (
-                              <View
-                                key={c.id ?? i}
-                                className={`${i < comments.length - 1 ? "border-b border-border mb-3 pb-3" : ""}`}
-                              >
-                                <View className="flex-row items-center gap-2 mb-1.5">
-                                  <View className="w-7 h-7 rounded-full bg-primary/20 items-center justify-center">
-                                    <Text className="text-xs font-bold text-accent">
-                                      {(c.userName || c.user?.name || "U")[0].toUpperCase()}
-                                    </Text>
-                                  </View>
-                                  <View className="flex-1">
-                                    <Text className="text-xs font-semibold text-text-primary">
-                                      {c.userName || c.user?.name || "Anonymous"}
-                                    </Text>
-                                    {c.createdAt && (
-                                      <Text className="text-[10px] text-text-secondary">
-                                        {timeAgo(new Date(c.createdAt), i18n.language)}
-                                      </Text>
-                                    )}
-                                  </View>
-                                </View>
-                                <Text className="text-sm text-text-secondary leading-relaxed ml-9">{c.text || c.content}</Text>
-                                {c.replies?.length > 0 && (
-                                  <View className="ml-9 mt-3 gap-3">
-                                    {c.replies.map((reply: any) => (
-                                      <View key={reply.id} className="border-l-2 border-primary/20 pl-3">
-                                        <View className="flex-row items-center gap-2 mb-1">
-                                          <View className="w-6 h-6 rounded-full bg-primary/10 items-center justify-center">
-                                            <Text className="text-[10px] font-bold text-accent">
-                                              {(reply.userName || "U")[0].toUpperCase()}
-                                            </Text>
-                                          </View>
-
-                                          <Text className="text-xs font-semibold text-text-primary">
-                                            {reply.userName || "Anonymous"}
-                                          </Text>
-                                        </View>
-
-                                        <Text className="text-sm text-text-secondary">{reply.text}</Text>
-                                      </View>
-                                    ))}
-                                  </View>
-                                )}
-                              </View>
-                            ))
-                          )}
+                {commentsLoading ? (
+                  <ActivityIndicator color="#a855f7" size="small" />
+                ) : comments.length === 0 ? (
+                  <View style={{ alignItems: "center", paddingVertical: 24 }}>
+                    <Ionicons name="chatbubble-outline" size={32} color={c.textSecondary} />
+                    <Text style={{ color: c.textSecondary, fontSize: 13, marginTop: 8 }}>{t("noComments")}</Text>
+                  </View>
+                ) : (
+                  comments.map((cm, i) => (
+                    <View key={cm.id ?? i} style={{ borderBottomWidth: i < comments.length - 1 ? 1 : 0, borderBottomColor: c.border + "80", marginBottom: i < comments.length - 1 ? 14 : 0, paddingBottom: i < comments.length - 1 ? 14 : 0 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                        <View style={{ width: 28, height: 28, borderRadius: 999, backgroundColor: "#7c3aed26", alignItems: "center", justifyContent: "center" }}>
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: "#a855f7" }}>
+                            {(cm.userName || cm.user?.name || "U")[0].toUpperCase()}
+                          </Text>
                         </View>
-
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 12, fontWeight: "600", color: c.textPrimary }}>{cm.userName || cm.user?.name || "Anonymous"}</Text>
+                          {cm.createdAt && <Text style={{ fontSize: 10, color: c.textSecondary }}>{timeAgo(new Date(cm.createdAt), i18n.language)}</Text>}
+                        </View>
+                      </View>
+                      <Text style={{ fontSize: 13, color: c.textSecondary, lineHeight: 20, marginLeft: 36 }}>{cm.text || cm.content}</Text>
+                    </View>
+                  ))
+                )}
+              </View>
             </View>
           )}
         </ScrollView>

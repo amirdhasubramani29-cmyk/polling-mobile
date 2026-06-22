@@ -13,7 +13,7 @@ function ThemedRoot() {
   const { colors } = useTheme();
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <StatusBar style={colors.statusBar} backgroundColor={colors.background} />
+      <StatusBar style={colors.statusBar} />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />

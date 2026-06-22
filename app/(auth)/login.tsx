@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Image
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -140,9 +141,29 @@ export default function LoginScreen() {
 
           {/* Logo */}
           <View style={{ alignItems: "center", marginBottom: 36 }}>
-            <View style={{ width: 68, height: 68, borderRadius: 22, backgroundColor: "#7c3aed26", alignItems: "center", justifyContent: "center", marginBottom: 14, borderWidth: 1.5, borderColor: "#7c3aed66" }}>
-              <Ionicons name="stats-chart" size={32} color="#a855f7" />
-            </View>
+           <View
+             style={{
+               width: 68,
+               height: 68,
+               borderRadius: 22,
+               backgroundColor: "#7c3aed26",
+               alignItems: "center",
+               justifyContent: "center",
+               marginBottom: 14,
+               borderWidth: 1.5,
+               borderColor: "#7c3aed66",
+               overflow: "hidden",
+             }}
+           >
+             <Image
+               source={require("../../assets/logo.png")}
+               style={{
+                 width: 82,
+                 height: 82,
+               }}
+               resizeMode="contain"
+             />
+           </View>
             <BrandName
                             className="text-3xl font-extrabold text-text-primary"
                             style={{

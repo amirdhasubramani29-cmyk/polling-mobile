@@ -1,13 +1,7 @@
 import { useState, useEffect } from "react";
 import {
-  View,
-  Text,
-  FlatList,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  ActivityIndicator,
-  RefreshControl,
+  View, Text, FlatList, TextInput, TouchableOpacity,
+  ScrollView, ActivityIndicator, RefreshControl, Image
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,6 +13,7 @@ import { apiFetch } from "../../src/utils/api";
 import { isLoggedIn } from "../../src/utils/authUser";
 import { useTheme } from "../../src/utils/theme";
 import { POLL_CATEGORIES  } from "../../src/constants/categories";
+import SkeletonHome from "../../src/components/SkeletonHome";
 
 export default function TrendingScreen() {
   const { t } = useTranslation();
@@ -36,20 +31,50 @@ export default function TrendingScreen() {
   const PER_PAGE = 10;
 
   useEffect(() => {
+       const start = Date.now();
     isLoggedIn().then(setLoggedIn);
+    console.log("API time: auth_check ", Date.now() - start, "ms");
+
   }, []);
 
   async function loadData() {
+    const totalStart = Date.now();
+
     try {
+      const pollsStart = Date.now();
+      const pollPromise = apiFetch("/api/polls");
+
+      const statsStart = Date.now();
+      const statPromise = apiFetch("/api/polls/stats");
+
       const [pollRes, statRes] = await Promise.all([
-        apiFetch("/api/polls"),
-        apiFetch("/api/polls/stats"),
+        pollPromise,
+        statPromise,
       ]);
-      const [pollData, statData] = await Promise.all([pollRes.json(), statRes.json()]);
+
+      console.log("/api/polls:", Date.now() - pollsStart, "ms");
+      console.log("/api/polls/stats:", Date.now() - statsStart, "ms");
+
+      const jsonStart = Date.now();
+
+      const [pollData, statData] = await Promise.all([
+        pollRes.json(),
+        statRes.json(),
+      ]);
+
+      console.log("json_parse:", Date.now() - jsonStart, "ms");
+
+      const mapStart = Date.now();
+
       const withCats = pollData.map((p: any) => ({
         ...p,
-        categoryNames: p.categories?.length ? p.categories.map((c: any) => c.name) : [t("uncategorized")],
+        categoryNames: p.categories?.length
+          ? p.categories.map((c: any) => c.name)
+          : [t("uncategorized")],
       }));
+
+      console.log("poll_map:", Date.now() - mapStart, "ms");
+
       setPolls(withCats);
       setStats(statData);
     } catch (e: any) {
@@ -61,6 +86,12 @@ export default function TrendingScreen() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+
+      console.log(
+        "TOTAL_LOAD:",
+        Date.now() - totalStart,
+        "ms"
+      );
     }
   }
 
@@ -107,13 +138,9 @@ export default function TrendingScreen() {
       </SafeAreaView>
     );
 
-  if (loading)
-    return (
-      <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator color="#a855f7" size="large" />
-        <Text style={{ color: colors.textSecondary, marginTop: 12, fontSize: 13 }}>{t("loading")}</Text>
-      </SafeAreaView>
-    );
+  if (loading) {
+      return <SkeletonHome />;
+    }
 
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1, backgroundColor: colors.background }}>
@@ -131,9 +158,25 @@ export default function TrendingScreen() {
         ListHeaderComponent={
           <View>
             {/* Header */}
-            <View style={{ marginBottom: 20 }}>
-              <BrandName className="text-3xl font-extrabold text-text-primary" />
-              <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 4 }}>Discover what people are voting on</Text>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                marginBottom: 20,
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <BrandName className="text-3xl font-extrabold text-text-primary" />
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 13,
+                    marginTop: 4,
+                  }}
+                >
+                  Discover what people are voting on
+                </Text>
+              </View>
             </View>
 
             {/* Stats */}

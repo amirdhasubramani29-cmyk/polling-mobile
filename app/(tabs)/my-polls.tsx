@@ -31,9 +31,12 @@ export default function MyPollsScreen() {
 
   useEffect(() => {
     if (authLoading) return;
+
     if (loggedIn) {
       loadPolls();
     } else {
+      setPolls([]);          // Clear old polls
+      setDeleteTarget(null); // Optional
       setLoading(false);
     }
   }, [loggedIn, authLoading]);
@@ -135,7 +138,7 @@ export default function MyPollsScreen() {
                   </Text>
                 )}
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <View><View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                     <Ionicons name="people-outline" size={13} color={colors.textSecondary} />
                     <Text style={{ fontSize: 11, color: colors.textSecondary }}>{item.totalVotes || 0} votes</Text>
                   </View>
@@ -153,7 +156,7 @@ export default function MyPollsScreen() {
                       {item.pollType === "REGIONAL" ? "Regional" : "Standard"}
                     </Text>
 
-                  </View>
+                  </View></View>
                   {item.categoryNames?.map((name: string) => {
                     const categoryColor = getCategoryColor(name);
 
