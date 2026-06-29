@@ -89,7 +89,10 @@ export default function FeedbackScreen() {
 
   return (
     <SafeAreaView edges={["bottom"]} style={{ flex: 1, backgroundColor: colors.background }}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
         <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
           {/* Intro */}
@@ -137,7 +140,7 @@ export default function FeedbackScreen() {
             <Ionicons name="person-outline" size={16} color={colors.textSecondary} />
             <TextInput
               style={{ ...inputStyle, flex: 1 }}
-              placeholder="John Doe"
+              placeholder="Enter your name"
               placeholderTextColor={colors.textSecondary}
               value={name}
               onChangeText={setName}

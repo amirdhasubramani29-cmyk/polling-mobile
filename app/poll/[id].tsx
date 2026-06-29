@@ -44,9 +44,28 @@ export default function PollDetailScreen() {
   const [comments, setComments] = useState<any[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [commentText, setCommentText] = useState("");
+  const [commentName, setCommentName] = useState("");
+  const [nameInput, setNameInput] = useState("");
+  const [nameSet, setNameSet] = useState(false);
+  const [isSavingName, setIsSavingName] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
 
-  useEffect(() => { isLoggedIn().then(setLoggedIn); }, []);
+  useEffect(() => {
+    isLoggedIn().then(setLoggedIn);
+    // Load persisted commentName from server (same as web)
+    SecureStore.getItemAsync("user").then(async (json) => {
+      if (!json) return;
+      try {
+        const user = JSON.parse(json);
+        if (user?.commentName) {
+          setCommentName(user.commentName);
+          setNameSet(true);
+        } else if (user?.name) {
+          setNameInput(user.name);
+        }
+      } catch {}
+    });
+  }, []);
 
   useEffect(() => {
     async function load() {
@@ -104,17 +123,42 @@ export default function PollDetailScreen() {
     finally { setCommentsLoading(false); }
   }
 
+  async function handleSaveCommentName() {
+    const n = nameInput.trim();
+    if (!n) return;
+    setIsSavingName(true);
+    try {
+      const res = await apiFetch("/api/comments/comment-name", {
+        method: "PUT",
+        body: JSON.stringify({ commentName: n }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      // Also persist locally in SecureStore
+      const json = await SecureStore.getItemAsync("user");
+      const user = json ? JSON.parse(json) : {};
+      await SecureStore.setItemAsync("user", JSON.stringify({ ...user, commentName: n }));
+      setCommentName(n);
+      setNameSet(true);
+    } catch {
+      Alert.alert("Error", "Could not save your display name. Please try again.");
+    } finally {
+      setIsSavingName(false);
+    }
+  }
+
   async function handlePostComment() {
     if (!commentText.trim()) return;
     if (!loggedIn) { router.push("/(auth)/login"); return; }
     setIsPosting(true);
     try {
       const userId = await getCurrentUserId();
-      const userJson = await SecureStore.getItemAsync("user");
-      const user = userJson ? JSON.parse(userJson) : null;
       const res = await apiFetch(`/api/comments/${id}`, {
         method: "POST",
-        body: JSON.stringify({ userId, userName: user?.name, text: commentText.trim() }),
+        body: JSON.stringify({
+          userId,
+          userName: commentName.trim() || "Anonymous",
+          text: commentText.trim(),
+        }),
       });
       if (!res.ok) throw new Error("Failed");
       setCommentText("");
@@ -204,7 +248,7 @@ export default function PollDetailScreen() {
       keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
     >
       <SafeAreaView edges={["left", "right", "bottom"]} style={{ flex: 1, backgroundColor: c.background }}>
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 24 }}>
 
           {/* ── Poll header card ── */}
           <View style={card}>
@@ -367,34 +411,93 @@ export default function PollDetailScreen() {
 
           {/* ── Comments ── */}
           <View style={card}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 }}>
-              <Ionicons name="chatbubbles-outline" size={18} color="#a855f7" />
-              <Text style={{ fontSize: 15, fontWeight: "700", color: c.textPrimary }}>
-                {t("comments")} {comments.length > 0 ? `(${comments.length})` : ""}
-              </Text>
+            {/* Header row: title + avatar/name when name is set */}
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Ionicons name="chatbubbles-outline" size={18} color="#a855f7" />
+                <Text style={{ fontSize: 15, fontWeight: "700", color: c.textPrimary }}>
+                  {t("comments")} {comments.length > 0 ? `(${comments.length})` : ""}
+                </Text>
+              </View>
+              {loggedIn && nameSet && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  {/* Avatar initials */}
+                  <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: "#7c3aed", alignItems: "center", justifyContent: "center" }}>
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#fff" }}>
+                      {commentName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: c.textSecondary }}>{commentName}</Text>
+                  <TouchableOpacity onPress={() => { setNameSet(false); setNameInput(commentName); }}>
+                    <Text style={{ fontSize: 11, color: "#a855f780" }}>Change</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
 
             {loggedIn ? (
-              <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 10, marginBottom: 20 }}>
-                <View style={{ flex: 1, backgroundColor: c.inputBg, borderWidth: 1, borderColor: c.border, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10 }}>
-                  <TextInput
-                    style={{ color: c.textPrimary, fontSize: 13, minHeight: 36, maxHeight: 80 }}
-                    placeholder={t("writeComment")}
-                    placeholderTextColor={c.textSecondary}
-                    value={commentText}
-                    onChangeText={setCommentText}
-                    multiline
-                    maxLength={200}
-                  />
+              !nameSet ? (
+                /* ── Join the discussion: name-entry card ── */
+                <View style={{ backgroundColor: "#7c3aed0a", borderWidth: 1, borderColor: "#7c3aed25", borderRadius: 16, padding: 16, marginBottom: 16 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                    <Ionicons name="chatbubble-ellipses-outline" size={18} color="#a855f7" />
+                    <Text style={{ fontSize: 14, fontWeight: "700", color: c.textPrimary }}>Join the discussion</Text>
+                  </View>
+                  <Text style={{ fontSize: 12, color: c.textSecondary, marginBottom: 12, lineHeight: 18 }}>
+                    Choose a display name to use when commenting.
+                  </Text>
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <TextInput
+                      style={{
+                        flex: 1, backgroundColor: c.inputBg, borderWidth: 1,
+                        borderColor: c.border, borderRadius: 12,
+                        paddingHorizontal: 14, paddingVertical: 10,
+                        color: c.textPrimary, fontSize: 13,
+                      }}
+                      placeholder="Display name"
+                      placeholderTextColor={c.textSecondary}
+                      value={nameInput}
+                      onChangeText={setNameInput}
+                      maxLength={50}
+                      onSubmitEditing={handleSaveCommentName}
+                      returnKeyType="done"
+                    />
+                    <TouchableOpacity
+                      onPress={handleSaveCommentName}
+                      disabled={!nameInput.trim() || isSavingName}
+                      style={{ backgroundColor: "#7c3aed", borderRadius: 12, paddingHorizontal: 16, alignItems: "center", justifyContent: "center", opacity: !nameInput.trim() || isSavingName ? 0.5 : 1 }}
+                    >
+                      {isSavingName
+                        ? <ActivityIndicator size="small" color="white" />
+                        : <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>Continue</Text>}
+                    </TouchableOpacity>
+                  </View>
                 </View>
-                <TouchableOpacity
-                  onPress={handlePostComment}
-                  disabled={!commentText.trim() || isPosting}
-                  style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: "#7c3aed", alignItems: "center", justifyContent: "center", opacity: !commentText.trim() || isPosting ? 0.5 : 1 }}
-                >
-                  {isPosting ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="send" size={16} color="white" />}
-                </TouchableOpacity>
-              </View>
+              ) : (
+                /* ── Compose box ── */
+                <View style={{ marginBottom: 20 }}>
+                  <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 10 }}>
+                    <View style={{ flex: 1, backgroundColor: c.inputBg, borderWidth: 1, borderColor: c.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 }}>
+                      <TextInput
+                        style={{ color: c.textPrimary, fontSize: 13, minHeight: 36, maxHeight: 80 }}
+                        placeholder={t("writeComment")}
+                        placeholderTextColor={c.textSecondary}
+                        value={commentText}
+                        onChangeText={setCommentText}
+                        multiline
+                        maxLength={200}
+                      />
+                    </View>
+                    <TouchableOpacity
+                      onPress={handlePostComment}
+                      disabled={!commentText.trim() || isPosting}
+                      style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: "#7c3aed", alignItems: "center", justifyContent: "center", opacity: !commentText.trim() || isPosting ? 0.5 : 1 }}
+                    >
+                      {isPosting ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="send" size={16} color="white" />}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )
             ) : (
               <TouchableOpacity
                 onPress={() => router.push("/(auth)/login")}

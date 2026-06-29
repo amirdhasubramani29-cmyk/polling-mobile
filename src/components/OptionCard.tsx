@@ -1,6 +1,7 @@
 import { View, Text, TouchableOpacity, Animated } from "react-native";
 import { useRef } from "react";
 import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../utils/theme";
 
 interface OptionCardProps {
   text: string;
@@ -10,22 +11,21 @@ interface OptionCardProps {
   disabled?: boolean;
 }
 
-export default function OptionCard({ text, isSelected, isPrevVote, onPress, disabled }: OptionCardProps) {
+export default function OptionCard({
+  text,
+  isSelected,
+  isPrevVote,
+  onPress,
+  disabled,
+}: OptionCardProps) {
+  const { colors } = useTheme();
   const scale = useRef(new Animated.Value(1)).current;
 
   const onPressIn = () =>
     !disabled &&
-    Animated.spring(scale, {
-      toValue: 0.98,
-      useNativeDriver: true,
-      speed: 25,
-    }).start();
+    Animated.spring(scale, { toValue: 0.98, useNativeDriver: true, speed: 25 }).start();
   const onPressOut = () =>
-    Animated.spring(scale, {
-      toValue: 1,
-      useNativeDriver: true,
-      speed: 25,
-    }).start();
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 25 }).start();
 
   return (
     <TouchableOpacity
@@ -35,33 +35,77 @@ export default function OptionCard({ text, isSelected, isPrevVote, onPress, disa
       onPress={!disabled ? onPress : undefined}
     >
       <Animated.View
-        style={{ transform: [{ scale }] }}
-        className={`flex-row items-center gap-3 p-4 rounded-2xl border-2 mb-3 ${
-          isSelected ? "border-primary bg-primary/8" : "border-border bg-surface"
-        }`}
+        style={{
+          transform: [{ scale }],
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
+          padding: 14,
+          borderRadius: 16,
+          borderWidth: 2,
+          marginBottom: 10,
+          borderColor: isSelected ? "#7c3aed" : colors.border,
+          backgroundColor: isSelected ? "#7c3aed14" : colors.surface,
+        }}
       >
         {/* Radio circle */}
         <View
-          className={`w-5 h-5 rounded-full border-2 items-center justify-center ${
-            isSelected ? "border-primary bg-primary" : "border-border"
-          }`}
+          style={{
+            width: 20,
+            height: 20,
+            borderRadius: 10,
+            borderWidth: 2,
+            alignItems: "center",
+            justifyContent: "center",
+            borderColor: isSelected ? "#7c3aed" : colors.border,
+            backgroundColor: isSelected ? "#7c3aed" : "transparent",
+          }}
         >
           {isSelected && <Ionicons name="checkmark" size={12} color="white" />}
         </View>
 
         {/* Option text */}
-        <Text className={`flex-1 text-sm font-medium ${isSelected ? "text-text-primary" : "text-text-secondary"}`}>
+        <Text
+          style={{
+            flex: 1,
+            fontSize: 14,
+            fontWeight: "500",
+            color: isSelected ? colors.textPrimary : colors.textSecondary,
+          }}
+        >
           {text}
         </Text>
 
-        {/* Badges */}
+        {/* Prev-vote badge */}
         {isPrevVote && !isSelected && (
-          <View className="flex-row items-center gap-0.5 px-1.5 py-0.5 rounded-full border border-success/30 bg-success/10">
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 3,
+              paddingHorizontal: 6,
+              paddingVertical: 3,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: "#10b98133",
+              backgroundColor: "#10b9810d",
+            }}
+          >
             <Ionicons name="checkmark" size={10} color="#10b981" />
-            <Text className="text-[10px] font-bold text-success">Prev.</Text>
+            <Text style={{ fontSize: 10, fontWeight: "700", color: "#10b981" }}>Prev.</Text>
           </View>
         )}
-        {isSelected && <View className="w-2 h-2 rounded-full bg-primary" />}
+
+        {isSelected && (
+          <View
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 4,
+              backgroundColor: "#7c3aed",
+            }}
+          />
+        )}
       </Animated.View>
     </TouchableOpacity>
   );

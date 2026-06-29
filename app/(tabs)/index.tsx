@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   View, Text, FlatList, TextInput, TouchableOpacity,
-  ScrollView, ActivityIndicator, RefreshControl, Image
+  ScrollView, RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -12,8 +12,8 @@ import BrandName from "../../src/components/BrandName";
 import { apiFetch } from "../../src/utils/api";
 import { isLoggedIn } from "../../src/utils/authUser";
 import { useTheme } from "../../src/utils/theme";
-import { POLL_CATEGORIES  } from "../../src/constants/categories";
-import SkeletonHome from "../../src/components/SkeletonHome";
+import { POLL_CATEGORIES } from "../../src/constants/categories";
+import SkeletonPollCard from "../../src/components/SkeletonPollCard";
 
 export default function TrendingScreen() {
   const { t } = useTranslation();
@@ -33,7 +33,7 @@ export default function TrendingScreen() {
   useEffect(() => {
        const start = Date.now();
     isLoggedIn().then(setLoggedIn);
-    console.log("API time: auth_check ", Date.now() - start, "ms");
+    //console.log("API time: auth_check ", Date.now() - start, "ms");
 
   }, []);
 
@@ -52,8 +52,8 @@ export default function TrendingScreen() {
         statPromise,
       ]);
 
-      console.log("/api/polls:", Date.now() - pollsStart, "ms");
-      console.log("/api/polls/stats:", Date.now() - statsStart, "ms");
+      //console.log("/api/polls:", Date.now() - pollsStart, "ms");
+      //console.log("/api/polls/stats:", Date.now() - statsStart, "ms");
 
       const jsonStart = Date.now();
 
@@ -62,7 +62,7 @@ export default function TrendingScreen() {
         statRes.json(),
       ]);
 
-      console.log("json_parse:", Date.now() - jsonStart, "ms");
+      //console.log("json_parse:", Date.now() - jsonStart, "ms");
 
       const mapStart = Date.now();
 
@@ -73,7 +73,7 @@ export default function TrendingScreen() {
           : [t("uncategorized")],
       }));
 
-      console.log("poll_map:", Date.now() - mapStart, "ms");
+      //console.log("poll_map:", Date.now() - mapStart, "ms");
 
       setPolls(withCats);
       setStats(statData);
@@ -87,11 +87,7 @@ export default function TrendingScreen() {
       setLoading(false);
       setRefreshing(false);
 
-      console.log(
-        "TOTAL_LOAD:",
-        Date.now() - totalStart,
-        "ms"
-      );
+      //console.log("TOTAL_LOAD:", Date.now() - totalStart, "ms");
     }
   }
 
@@ -138,16 +134,13 @@ export default function TrendingScreen() {
       </SafeAreaView>
     );
 
-  if (loading) {
-      return <SkeletonHome />;
-    }
 
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1, backgroundColor: colors.background }}>
       <FlatList
-        data={paged}
+        data={loading ? [] : paged}
         keyExtractor={(p) => String(p.id)}
-        contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 16 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -261,6 +254,23 @@ export default function TrendingScreen() {
           </View>
         }
         renderItem={({ item, index }) => <PollCard poll={item} showTrending={index < 3} />}
+        ListEmptyComponent={
+          loading ? (
+            <View>
+              <SkeletonPollCard />
+              <SkeletonPollCard />
+              <SkeletonPollCard />
+            </View>
+          ) : (
+            <View style={{ alignItems: "center", paddingVertical: 80 }}>
+              <Ionicons name="search-outline" size={48} color={colors.textSecondary} />
+              <Text style={{ color: colors.textPrimary, fontWeight: "700", fontSize: 20, marginTop: 16 }}>{t("noPolls")}</Text>
+              <TouchableOpacity onPress={() => { setSearch(""); setSelectedCategory("all"); }} style={{ marginTop: 16 }}>
+                <Text style={{ color: "#a855f7", fontSize: 13 }}>Clear filters</Text>
+              </TouchableOpacity>
+            </View>
+          )
+        }
         ListFooterComponent={
           hasMore ? (
             <TouchableOpacity
@@ -271,15 +281,7 @@ export default function TrendingScreen() {
             </TouchableOpacity>
           ) : null
         }
-        ListEmptyComponent={
-          <View style={{ alignItems: "center", paddingVertical: 80 }}>
-            <Ionicons name="search-outline" size={48} color={colors.textSecondary} />
-            <Text style={{ color: colors.textPrimary, fontWeight: "700", fontSize: 20, marginTop: 16 }}>{t("noPolls")}</Text>
-            <TouchableOpacity onPress={() => { setSearch(""); setSelectedCategory("all"); }} style={{ marginTop: 16 }}>
-              <Text style={{ color: "#a855f7", fontSize: 13 }}>Clear filters</Text>
-            </TouchableOpacity>
-          </View>
-        }
+
       />
     </SafeAreaView>
   );

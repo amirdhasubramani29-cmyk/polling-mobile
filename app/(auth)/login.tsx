@@ -136,8 +136,12 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: 24 }} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+      >
+        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: 24 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
           {/* Logo */}
           <View style={{ alignItems: "center", marginBottom: 36 }}>
@@ -300,7 +304,7 @@ export default function LoginScreen() {
                   <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textSecondary, textTransform: "uppercase", letterSpacing: 0.8 }}>{t("name")}</Text>
                   <View style={fieldBox}>
                     <Ionicons name="person-outline" size={16} color={colors.textSecondary} />
-                    <TextInput style={inputStyle} placeholder="John Doe" placeholderTextColor={colors.textSecondary} value={name} onChangeText={setName} autoCapitalize="words" />
+                    <TextInput style={inputStyle} placeholder="Enter your name" placeholderTextColor={colors.textSecondary} value={name} onChangeText={setName} autoCapitalize="words" />
                   </View>
                 </View>
 

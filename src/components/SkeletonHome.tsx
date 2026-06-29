@@ -40,7 +40,14 @@ export default function SkeletonHome() {
         showsVerticalScrollIndicator={false}
       >
         {/* Logo + subtitle */}
-        <View style={{ marginBottom: 20 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            marginBottom: 20,
+          }}
+        >
+         <View style={{ flex: 1 }}>
           <BrandName className="text-3xl font-extrabold text-text-primary" />
           <Text
             style={{
@@ -52,6 +59,7 @@ export default function SkeletonHome() {
           >
             Discover what people are voting on
           </Text>
+          </View>
         </View>
 
         {/* Stats cards */}

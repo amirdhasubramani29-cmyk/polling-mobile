@@ -2,6 +2,7 @@ import { ScrollView, Text, View, Linking, TouchableOpacity, Image } from "react-
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../src/utils/theme";
+import BrandName from "../src/components/BrandName";
 
 const FEATURES = [
   { icon: "flame-outline", label: "Real-time Trending Polls", color: "#a855f7" },
@@ -13,7 +14,7 @@ const FEATURES = [
 ];
 
 const TEAM = [
-  { name: "Amirdha Subramani", role: "Founder & Lead Developer", icon: "code-slash-outline" },
+  //{ name: "Amirdha Subramani", role: "Founder & Lead Developer", icon: "code-slash-outline" },
   { name: "Open Source", role: "Built on React Native & Expo", icon: "heart-outline" },
 ];
 
@@ -28,8 +29,8 @@ export default function AboutScreen() {
         <View style={{ alignItems: "center", marginBottom: 32 }}>
           <View
             style={{
-              width: 80,
-              height: 80,
+              width: 68,
+              height: 68,
               borderRadius: 26,
               backgroundColor: "#7c3aed26",
               borderWidth: 2,
@@ -49,7 +50,7 @@ export default function AboutScreen() {
               resizeMode="contain"
             />
           </View>
-          <Text style={{ fontSize: 26, fontWeight: "800", color: colors.textPrimary }}>trendingpolls</Text>
+          <BrandName className="text-3xl font-extrabold text-text-primary" />
           <Text style={{ fontSize: 14, color: colors.textSecondary, marginTop: 6, textAlign: "center" }}>
             Your voice, amplified
           </Text>

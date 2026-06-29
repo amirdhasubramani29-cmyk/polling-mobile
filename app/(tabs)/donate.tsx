@@ -41,7 +41,7 @@ export default function DonateScreen() {
 
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1, backgroundColor: colors.background }}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 16 }} showsVerticalScrollIndicator={false}>
         {/* Hero */}
         <View style={{ alignItems: "center", marginBottom: 28 }}>
           <View style={{ alignItems: "center" }}>
@@ -123,11 +123,37 @@ export default function DonateScreen() {
           <View style={{ padding: 12, backgroundColor: "#fff", borderRadius: 16, borderWidth: 3, borderColor: "#7c3aed40" }}>
             <View>
               <QRCode
-                value="upi://pay?pa=yourupi@oksbi&pn=trendingPolls"
+                value="upi://pay?pa=samirdha@ptaxis&pn=trendingPolls"
                 size={200}
               />
             </View>
           </View>
+
+          <TouchableOpacity
+            onPress={() => Linking.openURL("upi://pay?pa=samirdha@ptaxis&pn=trendingPolls&cu=INR")}
+            activeOpacity={0.8}
+            style={{
+              marginTop: 18,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              backgroundColor: "#7c3aed",
+              borderRadius: 14,
+              paddingVertical: 14,
+              paddingHorizontal: 28,
+              shadowColor: "#7c3aed",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.35,
+              shadowRadius: 10,
+              elevation: 6,
+            }}
+          >
+            <Ionicons name="phone-portrait-outline" size={20} color="#fff" />
+            <Text style={{ fontSize: 15, fontWeight: "700", color: "#fff", letterSpacing: 0.3 }}>
+              Open UPI App
+            </Text>
+          </TouchableOpacity>
 
         </View>
 

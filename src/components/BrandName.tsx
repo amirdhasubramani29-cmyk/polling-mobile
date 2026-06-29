@@ -65,7 +65,7 @@ export default function BrandName({ size = 30, style, ...props }: BrandNameProps
         ]}
       >
         trending
-        <Text style={{ color: accentColor, fontWeight: "900" }}>P</Text>
+        <Text style={{ /*color: accentColor,*/ fontWeight: "900" }}>P</Text>
         <Text style={{ color: baseColor }}>olls</Text>
       </Text>
     </View>

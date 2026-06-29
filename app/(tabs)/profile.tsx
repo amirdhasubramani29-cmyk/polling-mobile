@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { View, Text, TouchableOpacity, Switch, Alert, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -7,6 +7,7 @@ import { useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { isLoggedIn, logout } from "../../src/utils/authUser";
 import { useTheme } from "../../src/utils/theme";
+import { useFocusEffect } from "expo-router";
 
 export default function ProfileScreen() {
   const { t } = useTranslation();
@@ -15,12 +16,15 @@ export default function ProfileScreen() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [user, setUser] = useState<any>(null);
 
-  useEffect(() => {
-    isLoggedIn().then(setLoggedIn);
-    SecureStore.getItemAsync("user").then((u) => {
-      if (u) setUser(JSON.parse(u));
-    });
-  }, []);
+  // Reload user data every time this tab is focused so commentName changes are reflected
+  useFocusEffect(
+    useCallback(() => {
+      isLoggedIn().then(setLoggedIn);
+      SecureStore.getItemAsync("user").then((u) => {
+        if (u) setUser(JSON.parse(u));
+      });
+    }, [])
+  );
 
   async function handleLogout() {
     Alert.alert(t("logout"), "Are you sure you want to log out?", [
@@ -84,7 +88,7 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1, backgroundColor: colors.background }}>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 16 }} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <Text style={{ fontSize: 24, fontWeight: "800", color: colors.textPrimary, marginBottom: 20 }}>{t("profile")}</Text>
 
@@ -95,7 +99,7 @@ export default function ProfileScreen() {
           </View>
           {loggedIn && user ? (
             <>
-              <Text style={{ fontSize: 17, fontWeight: "700", color: colors.textPrimary }}>{user.name || "User"}</Text>
+              <Text style={{ fontSize: 17, fontWeight: "700", color: colors.textPrimary }}>{user.commentName || user.name || "User"}</Text>
               <Text style={{ fontSize: 13, color: colors.textSecondary }}>{user.email}</Text>
             </>
           ) : (
