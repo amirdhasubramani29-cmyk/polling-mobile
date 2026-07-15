@@ -17,6 +17,7 @@ import { apiFetch } from "../../src/utils/api";
 import { getCurrentUserId, isLoggedIn } from "../../src/utils/authUser";
 import { useTheme } from "../../src/utils/theme";
 import { getCategoryColor } from "../../src/utils/categoryColors";
+import { ShimmerBox } from "../../src/components/Skeleton";
 
 type Tab = "voted" | "created";
 
@@ -122,11 +123,11 @@ export default function MyPollsScreen() {
          ...p,
          categoryNames: p.categories?.map((c: any) => c.name) || [],
          totalVotes:
-           p.totalVotes ??
-           ((p.option1Votes || 0) +
-             (p.option2Votes || 0) +
-             (p.option3Votes || 0) +
-             (p.option4Votes || 0)),
+             p.totalVotes ??
+             ((p.votes1 || 0) +
+               (p.votes2 || 0) +
+               (p.votes3 || 0) +
+               (p.votes4 || 0)),
        }))
      );
    } catch (e) {
@@ -252,6 +253,38 @@ export default function MyPollsScreen() {
     );
   };
 
+  // ── Skeleton row — mirrors PollRow layout ──
+  const SkeletonPollRow = () => (
+    <View
+      style={{
+        backgroundColor: c.surface,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: c.border,
+        padding: 16,
+        marginBottom: 12,
+      }}
+    >
+      {/* Top row: title block + action buttons */}
+      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+        <View style={{ flex: 1, gap: 8 }}>
+          <ShimmerBox width="88%" height={15} borderRadius={8} />
+          <ShimmerBox width="62%" height={12} borderRadius={6} />
+        </View>
+        {/* Action button placeholders */}
+        <View style={{ gap: 8, alignSelf: "flex-start" }}>
+          <ShimmerBox width={34} height={34} borderRadius={10} />
+        </View>
+      </View>
+      {/* Badges row */}
+      <View style={{ flexDirection: "row", gap: 6, marginTop: 10 }}>
+        <ShimmerBox width={52} height={18} borderRadius={999} />
+        <ShimmerBox width={64} height={18} borderRadius={999} />
+        <ShimmerBox width={48} height={18} borderRadius={999} />
+      </View>
+    </View>
+  );
+
   // ── Auth guard ──
   if (authLoading)
     return (
@@ -338,8 +371,8 @@ export default function MyPollsScreen() {
 
       {/* ── List ── */}
       {currentLoading ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator color="#a855f7" size="large" />
+        <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
+          {[0, 1, 2, 3, 4].map((i) => <SkeletonPollRow key={i} />)}
         </View>
       ) : (
         <FlatList

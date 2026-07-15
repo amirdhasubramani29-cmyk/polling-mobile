@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -14,8 +14,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import OptionCard from "../../src/components/OptionCard";
+import { ShimmerBox } from "../../src/components/Skeleton";
 import { apiFetch } from "../../src/utils/api";
 import { isLoggedIn, getCurrentUserId } from "../../src/utils/authUser";
 import { timeAgo } from "../../src/utils/timeAgo";
@@ -80,22 +81,30 @@ export default function RegionalPollScreen() {
   const [nameSet, setNameSet] = useState(false);
   const [isSavingName, setIsSavingName] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
+  const [isRevoting, setIsRevoting] = useState(false);
 
   useEffect(() => {
     isLoggedIn().then(setLoggedIn);
-    SecureStore.getItemAsync("user").then(async (json) => {
+    SecureStore.getItemAsync("user").then((json) => {
       if (!json) return;
       try {
         const user = JSON.parse(json);
-        if (user?.commentName) {
-          setCommentName(user.commentName);
+        const name = user?.name || "";
+        if (name) {
+          setCommentName(name);
+          setNameInput(name);
           setNameSet(true);
-        } else if (user?.name) {
-          setNameInput(user.name);
         }
       } catch {}
     });
   }, []);
+
+  // Re-check auth whenever screen comes into focus (e.g. returning after login)
+  useFocusEffect(
+    useCallback(() => {
+      isLoggedIn().then(setLoggedIn);
+    }, [])
+  );
 
   useEffect(() => {
     async function load() {
@@ -158,9 +167,10 @@ export default function RegionalPollScreen() {
         body: JSON.stringify({ commentName: n }),
       });
       if (!res.ok) throw new Error("Failed");
+      // Save as user.name — single unified name across profile and comments
       const json = await SecureStore.getItemAsync("user");
       const user = json ? JSON.parse(json) : {};
-      await SecureStore.setItemAsync("user", JSON.stringify({ ...user, commentName: n }));
+      await SecureStore.setItemAsync("user", JSON.stringify({ ...user, name: n, commentName: n }));
       setCommentName(n);
       setNameSet(true);
     } catch {
@@ -237,21 +247,49 @@ export default function RegionalPollScreen() {
     if (!selectedOption || !selectedRegion) return;
     setIsVoting(true);
     try {
+      // Always re-check login status before voting to catch stale sessions
+      const currentlyLoggedIn = await isLoggedIn();
+      setLoggedIn(currentlyLoggedIn);
+
       const userId = await getCurrentUserId();
-      const res = await apiFetch(`/api/polls/${id}/vote`, {
+      const endpoint =
+        currentlyLoggedIn && isRevoting
+          ? `/api/polls/${id}/revote`
+          : `/api/polls/${id}/vote`;
+      const res = await apiFetch(endpoint, {
         method: "POST",
-        body: JSON.stringify({ selectedOption, userId, regionCode: selectedRegion.regionCode }),
+        body: JSON.stringify({
+          selectedOption,
+          userId,
+          regionCode: selectedRegion.regionCode,
+        }),
       });
+
+      if (res.status === 401) {
+        // Session expired — prompt re-login
+        setLoggedIn(false);
+        Alert.alert(
+          "Session Expired",
+          "Your session has expired. Please log in again to vote.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Log In", onPress: () => router.push("/(auth)/login") },
+          ]
+        );
+        return;
+      }
+
       if (!res.ok) throw new Error("Vote failed");
       const updated = await res.json();
       setPoll(updated);
       setHasVoted(true);
       setOriginalVoted(selectedOption);
+      setIsRevoting(false);
       const rrRes = await apiFetch(`/api/polls/${id}/regional-results`);
       if (rrRes.ok) setRegionalData(await rrRes.json());
       setStep(2);
     } catch {
-      Alert.alert("Error", "Failed to submit vote");
+      Alert.alert("Error", "Failed to submit vote. Please try again.");
     } finally {
       setIsVoting(false);
     }
@@ -259,8 +297,42 @@ export default function RegionalPollScreen() {
 
   if (loading)
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator color="#a855f7" size="large" />
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
+          {/* Header card skeleton */}
+          <View style={{ backgroundColor: colors.surface, borderRadius: 24, borderWidth: 1, borderColor: colors.border, padding: 20, marginBottom: 16, gap: 12 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+              <ShimmerBox width={100} height={22} borderRadius={999} />
+              <ShimmerBox width={72} height={22} borderRadius={999} />
+            </View>
+            <ShimmerBox width="92%" height={22} borderRadius={8} />
+            <ShimmerBox width="68%" height={22} borderRadius={8} />
+            <ShimmerBox width="50%" height={14} borderRadius={6} />
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
+              <View style={{ flexDirection: "row", gap: 20 }}>
+                <ShimmerBox width={52} height={24} borderRadius={8} />
+                <ShimmerBox width={52} height={24} borderRadius={8} />
+              </View>
+              <ShimmerBox width={28} height={28} borderRadius={8} />
+            </View>
+          </View>
+          {/* Step indicator skeleton */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 16 }}>
+            {[0, 1, 2].map((i) => (
+              <ShimmerBox key={i} width={i === 1 ? 80 : 60} height={28} borderRadius={999} />
+            ))}
+          </View>
+          {/* Region selector skeleton */}
+          <View style={{ backgroundColor: colors.surface, borderRadius: 24, borderWidth: 1, borderColor: colors.border, padding: 20, marginBottom: 16, gap: 12 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 }}>
+              <ShimmerBox width={34} height={34} borderRadius={10} />
+              <ShimmerBox width={140} height={16} borderRadius={8} />
+            </View>
+            {[0, 1, 2, 3].map((i) => (
+              <ShimmerBox key={i} width="100%" height={52} borderRadius={14} />
+            ))}
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
 
@@ -680,7 +752,10 @@ export default function RegionalPollScreen() {
               {/* Change vote */}
               {loggedIn && (
                 <TouchableOpacity
-                  onPress={() => { setHasVoted(false); setStep(1); }}
+                  onPress={() => {
+                    setHasVoted(false); setStep(1);
+                    setIsRevoting(true);
+                  }}
                   style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, borderRadius: 16, paddingVertical: 12, marginBottom: 16 }}
                 >
                   <Ionicons name="pencil-outline" size={14} color={c.textSecondary} />
@@ -691,69 +766,62 @@ export default function RegionalPollScreen() {
               {/* ── Comments ── */}
               <View style={cardStyle}>
                 {/* Header row */}
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <Ionicons name="chatbubbles-outline" size={18} color="#a855f7" />
-                    <Text style={{ fontSize: 15, fontWeight: "700", color: c.textPrimary }}>
-                      {t("comments")} {comments.length > 0 ? `(${comments.length})` : ""}
-                    </Text>
-                  </View>
-                  {loggedIn && nameSet && (
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                      <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: "#7c3aed", alignItems: "center", justifyContent: "center" }}>
-                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#fff" }}>
-                          {commentName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()}
-                        </Text>
-                      </View>
-                      <Text style={{ fontSize: 12, fontWeight: "600", color: c.textSecondary }}>{commentName}</Text>
-                      <TouchableOpacity onPress={() => { setNameSet(false); setNameInput(commentName); }}>
-                        <Text style={{ fontSize: 11, color: "#a855f780" }}>Change</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                  <Ionicons name="chatbubbles-outline" size={18} color="#a855f7" />
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: c.textPrimary }}>
+                    {t("comments")} {comments.length > 0 ? `(${comments.length})` : ""}
+                  </Text>
                 </View>
 
                 {loggedIn ? (
-                  !nameSet ? (
-                    /* ── Join the discussion: name-entry card ── */
-                    <View style={{ backgroundColor: "#7c3aed0a", borderWidth: 1, borderColor: "#7c3aed25", borderRadius: 16, padding: 16, marginBottom: 16 }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                        <Ionicons name="chatbubble-ellipses-outline" size={18} color="#a855f7" />
-                        <Text style={{ fontSize: 14, fontWeight: "700", color: c.textPrimary }}>Join the discussion</Text>
-                      </View>
-                      <Text style={{ fontSize: 12, color: c.textSecondary, marginBottom: 12, lineHeight: 18 }}>
-                        Choose a display name to use when commenting.
-                      </Text>
-                      <View style={{ flexDirection: "row", gap: 8 }}>
+                  <View style={{ marginBottom: 16 }}>
+                    {/* Name row — readable display or inline edit */}
+                    {!nameSet ? (
+                      /* ── Inline name edit (first time or after Change) ── */
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
                         <TextInput
                           style={{
                             flex: 1, backgroundColor: c.inputBg, borderWidth: 1,
-                            borderColor: c.border, borderRadius: 12,
+                            borderColor: "#7c3aed66", borderRadius: 12,
                             paddingHorizontal: 14, paddingVertical: 10,
                             color: c.textPrimary, fontSize: 13,
                           }}
-                          placeholder="Display name"
+                          placeholder="Your display name"
                           placeholderTextColor={c.textSecondary}
                           value={nameInput}
                           onChangeText={setNameInput}
                           maxLength={50}
                           onSubmitEditing={handleSaveCommentName}
                           returnKeyType="done"
+                          autoFocus
                         />
                         <TouchableOpacity
                           onPress={handleSaveCommentName}
                           disabled={!nameInput.trim() || isSavingName}
-                          style={{ backgroundColor: "#7c3aed", borderRadius: 12, paddingHorizontal: 16, alignItems: "center", justifyContent: "center", opacity: !nameInput.trim() || isSavingName ? 0.5 : 1 }}
+                          style={{ backgroundColor: "#7c3aed", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, opacity: !nameInput.trim() || isSavingName ? 0.5 : 1 }}
                         >
                           {isSavingName
                             ? <ActivityIndicator size="small" color="white" />
-                            : <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>Continue</Text>}
+                            : <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>Save</Text>}
                         </TouchableOpacity>
                       </View>
-                    </View>
-                  ) : (
-                    /* ── Compose box ── */
-                    <View style={{ marginBottom: 20 }}>
+                    ) : (
+                      /* ── Readable name display + Change link ── */
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12, backgroundColor: c.surface2, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 }}>
+                        <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#7c3aed", alignItems: "center", justifyContent: "center" }}>
+                          <Text style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}>
+                            {commentName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()}
+                          </Text>
+                        </View>
+                        <Text style={{ flex: 1, fontSize: 13, fontWeight: "600", color: c.textPrimary }}>{commentName}</Text>
+                        <TouchableOpacity onPress={() => { setNameSet(false); setNameInput(commentName); }}>
+                          <Text style={{ fontSize: 12, color: "#a855f7", fontWeight: "500" }}>Change</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
+                    {/* Compose box — only shown when name is set */}
+                    {nameSet && (
                       <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 10 }}>
                         <View style={{ flex: 1, backgroundColor: c.inputBg, borderWidth: 1, borderColor: c.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 }}>
                           <TextInput
@@ -774,8 +842,8 @@ export default function RegionalPollScreen() {
                           {isPosting ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="send" size={16} color="white" />}
                         </TouchableOpacity>
                       </View>
-                    </View>
-                  )
+                    )}
+                  </View>
                 ) : (
                   <TouchableOpacity
                     onPress={() => router.push("/(auth)/login")}

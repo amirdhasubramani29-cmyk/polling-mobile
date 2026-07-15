@@ -1,6 +1,9 @@
 # dependencies
 node_modules/
 
+# keystore
+keystore.txt
+
 # Expo
 .expo/
 dist/
