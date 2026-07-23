@@ -105,7 +105,7 @@ export default function LoginScreen() {
     try {
       const res = await apiFetch("/api/auth/register/verify-otp", {
         method: "POST",
-        body: JSON.stringify({ email, otp }),
+        body: JSON.stringify({ email, otp, name, password }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "OTP verification failed");
