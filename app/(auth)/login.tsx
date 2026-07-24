@@ -79,9 +79,30 @@ export default function LoginScreen() {
   }
 
   async function handleSendOtp() {
-    if (!name || !email || !password) return Alert.alert("Error", "Please fill in all fields.");
-    if (password !== confirmPassword) return Alert.alert("Error", "Passwords do not match.");
-    if (!agreedToTerms) return Alert.alert("Error", "Please agree to the Terms and Privacy Policy.");
+    if (!name || !email || !password)
+      return Alert.alert("Error", "Please fill in all fields.");
+
+    if (password !== confirmPassword)
+      return Alert.alert("Error", "Passwords do not match.");
+
+    if (password.length < 8)
+      return Alert.alert("Password", "Password must be at least 8 characters long.");
+
+    if (!/[A-Z]/.test(password))
+      return Alert.alert("Password", "Password must contain at least one uppercase letter.");
+
+    if (!/[a-z]/.test(password))
+      return Alert.alert("Password", "Password must contain at least one lowercase letter.");
+
+    if (!/[0-9]/.test(password))
+      return Alert.alert("Password", "Password must contain at least one number.");
+
+    if (!/[!@#$%^&*(),.?\":{}|<>]/.test(password))
+      return Alert.alert("Password", "Password must contain at least one special character.");
+
+    if (!agreedToTerms)
+      return Alert.alert("Error", "Please agree to the Terms and Privacy Policy.");
+
     setLoading(true);
     try {
       const res = await apiFetch("/api/auth/register/send-otp", {
@@ -89,7 +110,27 @@ export default function LoginScreen() {
         body: JSON.stringify({ name, email, password, lang: "en" }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to send OTP");
+      if (!res.ok) {
+        let message = "Failed to send OTP.";
+
+        switch (data.code) {
+          case "EMAIL_REQUIRED":
+            message = "Please enter your email address.";
+            break;
+
+          case "EMAIL_EXISTS":
+            message = "An account with this email already exists.";
+            break;
+
+          case "OTP_FAIL":
+            message = "Unable to send OTP. Please try again later.";
+            break;
+
+          default:
+            message = data.message || "Something went wrong.";
+        }
+        throw new Error(message);
+      }
       setMode("otp");
       setTimeout(() => otpRef.current?.focus(), 300);
     } catch (e: any) {
