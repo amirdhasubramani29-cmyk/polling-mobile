@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { View, Text, TouchableOpacity, Switch, Alert, ScrollView, Modal, ActivityIndicator } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useRouter } from "expo-router";
@@ -56,8 +56,8 @@ export default function ProfileScreen() {
     if (!deleteChecked) return;
     setIsDeleting(true);
     try {
-      const res = await apiFetch("/api/auth/account", { method: "DELETE" });
-      if (res.ok || res.status === 204) {
+      const res = await apiFetch("/api/auth/delete-account", { method: "DELETE" });
+       if (res.ok || res.status === 204) {
         setDeleteModalVisible(false);
         await logout();
         setLoggedIn(false);
@@ -85,6 +85,8 @@ export default function ProfileScreen() {
       {children}
     </View>
   );
+
+  const insets = useSafeAreaInsets();
 
   const Row = ({
     icon,
@@ -223,7 +225,7 @@ export default function ProfileScreen() {
               borderWidth: 1,
               borderColor: colors.border,
               padding: 24,
-              paddingBottom: 36,
+              paddingBottom: Math.max(insets.bottom, 16) + 20,
             }}
           >
             {/* Drag handle */}

@@ -86,7 +86,7 @@ export default function LoginScreen() {
     try {
       const res = await apiFetch("/api/auth/register/send-otp", {
         method: "POST",
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email, password, lang: "en" }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to send OTP");
