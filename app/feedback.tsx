@@ -33,6 +33,13 @@ export default function FeedbackScreen() {
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
 
+  const MAX_NAME_LENGTH = 30;
+  const MAX_EMAIL_LENGTH = 60;
+  const MAX_MESSAGE_LENGTH = 2000;
+
+  const EMAIL_REGEX =
+    /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+
   const fieldBox = {
     backgroundColor: colors.inputBg,
     borderWidth: 1,
@@ -44,10 +51,40 @@ export default function FeedbackScreen() {
   const inputStyle = { paddingVertical: 13, color: colors.textPrimary, fontSize: 14 };
 
   async function handleSubmit() {
-    if (!name.trim()) return Alert.alert("Missing field", "Please enter your name.");
-    if (!email.trim()) return Alert.alert("Missing field", "Please enter your email.");
-    if (!message.trim() || message.trim().length < 10)
-      return Alert.alert("Missing field", "Please enter a message (at least 10 characters).");
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+    const trimmedMessage = message.trim();
+    if (!trimmedName)
+      return Alert.alert("Missing field", "Please enter your name.");
+    if (trimmedName.length > MAX_NAME_LENGTH)
+      return Alert.alert(
+        "Invalid Name",
+        `Name cannot exceed ${MAX_NAME_LENGTH} characters.`
+        );
+    if (!trimmedEmail)
+      return Alert.alert("Missing field", "Please enter your email.");
+    if (trimmedEmail.length > MAX_EMAIL_LENGTH)
+      return Alert.alert(
+        "Invalid Email",
+        `Email cannot exceed ${MAX_EMAIL_LENGTH} characters.`
+      );
+    if (!EMAIL_REGEX.test(trimmedEmail))
+      return Alert.alert(
+        "Invalid Email",
+        "Please enter a valid email address."
+      );
+    if (!trimmedMessage)
+      return Alert.alert("Missing field", "Please enter your message.");
+    if (trimmedMessage.length < 10)
+      return Alert.alert(
+        "Message Too Short",
+        "Message must contain at least 10 characters."
+      );
+    if (trimmedMessage.length > MAX_MESSAGE_LENGTH)
+      return Alert.alert(
+        "Message Too Long",
+        `Message cannot exceed ${MAX_MESSAGE_LENGTH} characters.`
+      );
 
     setLoading(true);
     try {
@@ -145,6 +182,7 @@ export default function FeedbackScreen() {
               value={name}
               onChangeText={setName}
               autoCapitalize="words"
+              maxLength={MAX_NAME_LENGTH}
             />
           </View>
 
@@ -161,6 +199,7 @@ export default function FeedbackScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
+              maxLength={MAX_EMAIL_LENGTH}
             />
           </View>
 
@@ -175,6 +214,7 @@ export default function FeedbackScreen() {
               onChangeText={setMessage}
               multiline
               numberOfLines={6}
+              maxLength={MAX_MESSAGE_LENGTH}
             />
           </View>
 

@@ -13,7 +13,7 @@ export default {
   all: "All",
   trending: "Trending",
   uncategorized: "Uncategorized",
-  trendingPolls: "Trending Polls",
+  trendingPolls: "trendingPolls",
   activePolls: "Active Polls",
   totalVotes: "Total Votes",
   activeToday: "Active Today",

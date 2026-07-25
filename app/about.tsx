@@ -5,7 +5,7 @@ import { useTheme } from "../src/utils/theme";
 import BrandName from "../src/components/BrandName";
 
 const FEATURES = [
-  { icon: "flame-outline", label: "Real-time Trending Polls", color: "#a855f7" },
+  { icon: "flame-outline", label: "Real-time Polls", color: "#a855f7" },
   { icon: "location-outline", label: "Regional Polls by Location", color: "#0ea5e9" },
   { icon: "shield-checkmark-outline", label: "Privacy-first, No Ads", color: "#10b981" },
   { icon: "phone-portrait-outline", label: "Native Mobile Experience", color: "#f59e0b" },

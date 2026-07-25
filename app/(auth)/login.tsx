@@ -39,6 +39,9 @@ export default function LoginScreen() {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const otpRef = useRef<TextInput>(null);
 
+  const EMAIL_REGEX =
+    /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+
   const inputStyle = {
     flex: 1,
     paddingVertical: 14,
@@ -58,7 +61,16 @@ export default function LoginScreen() {
   };
 
   async function handleSignIn() {
-    if (!email || !password) return Alert.alert("Error", "Please fill in all fields.");
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail)
+      return Alert.alert("Error", "Please enter your email address.");
+    if (!EMAIL_REGEX.test(trimmedEmail))
+      return Alert.alert(
+        "Invalid Email",
+        "Please enter a valid email address."
+      );
+    if (!password)
+      return Alert.alert("Error", "Please enter your password.");
     setLoading(true);
     try {
       const res = await apiFetch("/api/auth/login", {

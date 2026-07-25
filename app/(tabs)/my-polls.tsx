@@ -405,7 +405,7 @@ export default function MyPollsScreen() {
               </Text>
               <Text style={{ color: c.textSecondary, fontSize: 13, marginTop: 8, textAlign: "center" }}>
                 {isVoted
-                  ? "Browse trending polls and cast your first vote!"
+                  ? "Browse trendingPolls and cast your first vote!"
                   : "Create your first poll and share it with the world."}
               </Text>
               <TouchableOpacity
