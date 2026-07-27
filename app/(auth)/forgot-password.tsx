@@ -33,6 +33,9 @@ export default function ForgotPasswordScreen() {
   const [loading, setLoading] = useState(false);
   const otpRef = useRef<TextInput>(null);
 
+  const EMAIL_REGEX =
+      /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+
   const fieldBox = {
     flexDirection: "row" as const,
     alignItems: "center" as const,
@@ -47,7 +50,16 @@ export default function ForgotPasswordScreen() {
   const inputStyle = { flex: 1, paddingVertical: 14, color: colors.textPrimary, fontSize: 14 };
 
   async function handleSendReset() {
-    if (!email) return Alert.alert("Error", "Please enter your email.");
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      return Alert.alert("Error", "Please enter your email address.");
+    }
+    if (!EMAIL_REGEX.test(trimmedEmail)) {
+      return Alert.alert(
+        "Invalid Email",
+        "Please enter a valid email address."
+      );
+    }
     setLoading(true);
     try {
       const res = await apiFetch("/api/auth/forgot-password", {
@@ -184,9 +196,30 @@ export default function ForgotPasswordScreen() {
                 <Text style={{ fontSize: 15, fontWeight: "600", color: colors.textPrimary }}>Check your inbox</Text>
               </View>
 
+              {/* Info banner */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "flex-start",
+                  gap: 10,
+                  backgroundColor: "#7c3aed0d",
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: "#7c3aed26",
+                  padding: 12,
+                }}
+              >
+                <Ionicons name="information-circle-outline" size={16} color="#a855f7" style={{ marginTop: 1 }} />
+                <Text style={{ flex: 1, fontSize: 12, color: colors.textSecondary, lineHeight: 18 }}>
+                  If{" "}
+                  <Text style={{ color: "#a855f7", fontWeight: "600" }}>{email}</Text>
+                  {" "}is linked to an account, a 6-digit OTP has been sent to it. Check your spam folder if you don't see it.
+                </Text>
+              </View>
+
               {/* 6-box OTP */}
               <TouchableOpacity activeOpacity={1} onPress={() => otpRef.current?.focus()}>
-                <View style={{ flexDirection: "row", gap: 10, justifyContent: "center", marginVertical: 4 }}>
+                <View style={{ flexDirection: "row", gap: 8 }}>
                   {Array.from({ length: 6 }).map((_, i) => {
                     const filled = i < otp.length;
                     const active = i === otp.length;
@@ -194,8 +227,8 @@ export default function ForgotPasswordScreen() {
                       <View
                         key={i}
                         style={{
-                          width: 44,
-                          height: 54,
+                          flex: 1,
+                          aspectRatio: 0.8,
                           borderRadius: 12,
                           borderWidth: 2,
                           borderColor: active ? "#a855f7" : filled ? "#7c3aed" : colors.border,
@@ -244,7 +277,53 @@ export default function ForgotPasswordScreen() {
                     <Ionicons name={showPass ? "eye-off-outline" : "eye-outline"} size={16} color={colors.textSecondary} />
                   </TouchableOpacity>
                 </View>
+
+                {/* Live password rules */}
+                {newPassword.length > 0 && (() => {
+                  const rules = [
+                    { label: "At least 8 characters",         ok: newPassword.length >= 8 },
+                    { label: "One uppercase letter (A–Z)",     ok: /[A-Z]/.test(newPassword) },
+                    { label: "One lowercase letter (a–z)",     ok: /[a-z]/.test(newPassword) },
+                    { label: "One number (0–9)",               ok: /[0-9]/.test(newPassword) },
+                    { label: "One special character (!@#$…)",  ok: /[!@#$%^&*(),.?":{}|<>]/.test(newPassword) },
+                  ];
+                  const allPassed = rules.every((r) => r.ok);
+                  return (
+                    <View
+                      style={{
+                        backgroundColor: allPassed ? "#10b9810d" : colors.inputBg,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: allPassed ? "#10b98133" : colors.border,
+                        padding: 12,
+                        gap: 7,
+                        marginTop: 2,
+                      }}
+                    >
+                      {rules.map((rule) => (
+                        <View key={rule.label} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                          <View
+                            style={{
+                              width: 16,
+                              height: 16,
+                              borderRadius: 8,
+                              backgroundColor: rule.ok ? "#10b981" : "#ef444426",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <Ionicons name={rule.ok ? "checkmark" : "close"} size={10} color={rule.ok ? "#fff" : "#ef4444"} />
+                          </View>
+                          <Text style={{ fontSize: 12, color: rule.ok ? "#10b981" : colors.textSecondary, fontWeight: rule.ok ? "600" : "400" }}>
+                            {rule.label}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  );
+                })()}
               </View>
+
               <View style={{ gap: 6 }}>
                 <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textSecondary, textTransform: "uppercase", letterSpacing: 0.8 }}>Confirm Password</Text>
                 <View style={fieldBox}>
@@ -255,9 +334,25 @@ export default function ForgotPasswordScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
-              <TouchableOpacity onPress={handleUpdatePassword} disabled={loading} style={{ backgroundColor: "#7c3aed", borderRadius: 14, paddingVertical: 14, alignItems: "center", opacity: loading ? 0.7 : 1 }}>
-                {loading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Reset Password</Text>}
-              </TouchableOpacity>
+
+              {(() => {
+                const allRulesPassed =
+                  newPassword.length >= 8 &&
+                  /[A-Z]/.test(newPassword) &&
+                  /[a-z]/.test(newPassword) &&
+                  /[0-9]/.test(newPassword) &&
+                  /[!@#$%^&*(),.?":{}|<>]/.test(newPassword);
+                const canSubmit = allRulesPassed && newPassword === confirmPassword && !loading;
+                return (
+                  <TouchableOpacity
+                    onPress={handleUpdatePassword}
+                    disabled={!canSubmit}
+                    style={{ backgroundColor: "#7c3aed", borderRadius: 14, paddingVertical: 14, alignItems: "center", opacity: canSubmit ? 1 : 0.5 }}
+                  >
+                    {loading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Reset Password</Text>}
+                  </TouchableOpacity>
+                );
+              })()}
             </View>
           )}
 

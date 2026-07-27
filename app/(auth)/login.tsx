@@ -91,8 +91,16 @@ export default function LoginScreen() {
   }
 
   async function handleSendOtp() {
-    if (!name || !email || !password)
+    const trimmedEmail = email.trim();
+
+    if (!name || !trimmedEmail || !password)
       return Alert.alert("Error", "Please fill in all fields.");
+
+    if (!EMAIL_REGEX.test(trimmedEmail))
+      return Alert.alert(
+        "Invalid Email",
+        "Please enter a valid email address."
+      );
 
     if (password !== confirmPassword)
       return Alert.alert("Error", "Passwords do not match.");
@@ -265,7 +273,7 @@ export default function LoginScreen() {
 
                 {/* 6-box OTP display */}
                 <TouchableOpacity activeOpacity={1} onPress={() => otpRef.current?.focus()}>
-                  <View style={{ flexDirection: "row", gap: 10, justifyContent: "center", marginVertical: 8 }}>
+                  <View style={{ flexDirection: "row", gap: 8, marginVertical: 8 }}>
                     {Array.from({ length: 6 }).map((_, i) => {
                       const filled = i < otp.length;
                       const active = i === otp.length;
@@ -273,8 +281,8 @@ export default function LoginScreen() {
                         <View
                           key={i}
                           style={{
-                            width: 44,
-                            height: 54,
+                            flex: 1,
+                            aspectRatio: 0.8,
                             borderRadius: 12,
                             borderWidth: 2,
                             borderColor: active ? "#a855f7" : filled ? "#7c3aed" : colors.border,
@@ -337,7 +345,7 @@ export default function LoginScreen() {
                   </View>
                   <View style={fieldBox}>
                     <Ionicons name="lock-closed-outline" size={16} color={colors.textSecondary} />
-                    <TextInput style={inputStyle} placeholder="••••••••" placeholderTextColor={colors.textSecondary} value={password} onChangeText={setPassword} secureTextEntry={!showPassword} />
+                    <TextInput style={inputStyle} placeholder="••••••••" maxLength={128} placeholderTextColor={colors.textSecondary} value={password} onChangeText={setPassword} secureTextEntry={!showPassword} />
                     <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                       <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={16} color={colors.textSecondary} />
                     </TouchableOpacity>
@@ -357,7 +365,7 @@ export default function LoginScreen() {
                   <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textSecondary, textTransform: "uppercase", letterSpacing: 0.8 }}>{t("name")}</Text>
                   <View style={fieldBox}>
                     <Ionicons name="person-outline" size={16} color={colors.textSecondary} />
-                    <TextInput style={inputStyle} placeholder="Enter your name" placeholderTextColor={colors.textSecondary} value={name} onChangeText={setName} autoCapitalize="words" />
+                    <TextInput style={inputStyle} placeholder="Enter your name" maxLength={100} placeholderTextColor={colors.textSecondary} value={name} onChangeText={setName} autoCapitalize="words" />
                   </View>
                 </View>
 
@@ -365,7 +373,7 @@ export default function LoginScreen() {
                   <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textSecondary, textTransform: "uppercase", letterSpacing: 0.8 }}>{t("email")}</Text>
                   <View style={fieldBox}>
                     <Ionicons name="mail-outline" size={16} color={colors.textSecondary} />
-                    <TextInput style={inputStyle} placeholder="you@example.com" placeholderTextColor={colors.textSecondary} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
+                    <TextInput style={inputStyle} placeholder="you@example.com" maxLength={254} placeholderTextColor={colors.textSecondary} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
                   </View>
                 </View>
 
@@ -378,13 +386,62 @@ export default function LoginScreen() {
                       <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={16} color={colors.textSecondary} />
                     </TouchableOpacity>
                   </View>
+
+                  {/* Password rules — shown as soon as the user starts typing */}
+                  {password.length > 0 && (() => {
+                    const rules = [
+                      { label: "At least 8 characters",          ok: password.length >= 8 },
+                      { label: "One uppercase letter (A–Z)",      ok: /[A-Z]/.test(password) },
+                      { label: "One lowercase letter (a–z)",      ok: /[a-z]/.test(password) },
+                      { label: "One number (0–9)",                ok: /[0-9]/.test(password) },
+                      { label: "One special character (!@#$…)",   ok: /[!@#$%^&*(),.?":{}|<>]/.test(password) },
+                    ];
+                    const allPassed = rules.every((r) => r.ok);
+                    return (
+                      <View
+                        style={{
+                          backgroundColor: allPassed ? "#10b9810d" : colors.inputBg,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: allPassed ? "#10b98133" : colors.border,
+                          padding: 12,
+                          gap: 7,
+                          marginTop: 2,
+                        }}
+                      >
+                        {rules.map((rule) => (
+                          <View key={rule.label} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                            <View
+                              style={{
+                                width: 16,
+                                height: 16,
+                                borderRadius: 8,
+                                backgroundColor: rule.ok ? "#10b981" : "#ef444426",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                            >
+                              <Ionicons
+                                name={rule.ok ? "checkmark" : "close"}
+                                size={10}
+                                color={rule.ok ? "#fff" : "#ef4444"}
+                              />
+                            </View>
+                            <Text style={{ fontSize: 12, color: rule.ok ? "#10b981" : colors.textSecondary, fontWeight: rule.ok ? "600" : "400" }}>
+                              {rule.label}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    );
+                  })()}
                 </View>
 
                 <View style={{ gap: 6 }}>
                   <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textSecondary, textTransform: "uppercase", letterSpacing: 0.8 }}>Confirm Password</Text>
                   <View style={fieldBox}>
                     <Ionicons name="lock-closed-outline" size={16} color={colors.textSecondary} />
-                    <TextInput style={inputStyle} placeholder="Repeat password" placeholderTextColor={colors.textSecondary} value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry={!showConfirm} />
+                    <TextInput style={inputStyle} placeholder="Repeat password" maxLength={128} placeholderTextColor={colors.textSecondary} value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry={!showConfirm} />
                     <TouchableOpacity onPress={() => setShowConfirm(!showConfirm)}>
                       <Ionicons name={showConfirm ? "eye-off-outline" : "eye-outline"} size={16} color={colors.textSecondary} />
                     </TouchableOpacity>

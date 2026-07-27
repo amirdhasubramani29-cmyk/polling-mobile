@@ -144,7 +144,13 @@ export default function TrendingScreen() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => { setRefreshing(true); loadData(); }}
+            onRefresh={() => {
+                setRefreshing(true);
+                setSearch("");
+                setSelectedCategory("all");
+                setPage(1);
+                loadData();
+            }}
             tintColor="#a855f7"
           />
         }
