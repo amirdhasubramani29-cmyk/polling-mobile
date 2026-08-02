@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { View, Text, TouchableOpacity, ScrollView, Linking, Modal, Clipboard } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../src/utils/theme";
 import BrandName from "../../src/components/BrandName";
@@ -11,17 +11,16 @@ const UPI_URL = `upi://pay?pa=${UPI_ID}&pn=trendingPolls&cu=INR`;
 
 export default function DonateScreen() {
   const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const [noAppModal, setNoAppModal] = useState(false);
   const [copied, setCopied] = useState(false);
 
   async function handleOpenUPI() {
     try {
-      const canOpen = await Linking.canOpenURL(UPI_URL);
-      if (canOpen) {
-        await Linking.openURL(UPI_URL);
-      } else {
-        setNoAppModal(true);
-      }
+      // openURL directly — canOpenURL is unreliable on Android 11+ due to
+      // package-visibility restrictions and returns false even when GPay/Paytm
+      // are installed. Show the fallback modal only if openURL actually throws.
+      await Linking.openURL(UPI_URL);
     } catch {
       setNoAppModal(true);
     }
@@ -155,7 +154,7 @@ export default function DonateScreen() {
               borderWidth: 1,
               borderColor: colors.border,
               padding: 24,
-              paddingBottom: 36,
+              paddingBottom: Math.max(insets.bottom + 16, 36),
               gap: 16,
             }}
           >
